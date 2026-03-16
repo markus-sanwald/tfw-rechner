@@ -1,11 +1,17 @@
 import { analysiereZeitraum, formatDate, parseDate, daysInMonth } from './rechner.js';
+import { t, getLang, setLang } from './i18n.js';
 
-const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
-const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const MONTHS_DE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAYS_DE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const WEEKDAYS_EN = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
+function getMonths() { return getLang() === 'en' ? MONTHS_EN : MONTHS_DE; }
+function getWeekdays() { return getLang() === 'en' ? WEEKDAYS_EN : WEEKDAYS_DE; }
 
 // ── Datepicker Component ──────────────────────────────────────────
 
-function createDatepicker(id, label, onChange) {
+function createDatepicker(id, labelKey, onChange) {
   let selectedDate = null;
   let viewYear = new Date().getFullYear();
   let viewMonth = new Date().getMonth();
@@ -13,55 +19,70 @@ function createDatepicker(id, label, onChange) {
 
   const wrapper = document.createElement('div');
   wrapper.className = 'form-group';
-  wrapper.innerHTML = `
-    <label for="${id}">${label}</label>
-    <div class="datepicker-wrapper" id="${id}-wrapper">
-      <input type="text" class="datepicker-input" id="${id}" readonly placeholder="TT.MM.JJJJ">
-      <span class="datepicker-icon">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <rect x="1" y="3" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M1 7h14" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M5 1v4M11 1v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-      </span>
-      <div class="datepicker-dropdown">
-        <div class="dp-header">
-          <button type="button" class="dp-nav dp-prev-year" title="Vorheriges Jahr">&laquo;</button>
-          <button type="button" class="dp-nav dp-prev" title="Vorheriger Monat">&lsaquo;</button>
-          <button type="button" class="dp-title"></button>
-          <button type="button" class="dp-nav dp-next" title="Nächster Monat">&rsaquo;</button>
-          <button type="button" class="dp-nav dp-next-year" title="Nächstes Jahr">&raquo;</button>
-        </div>
-        <div class="dp-month-select hidden"></div>
-        <div class="dp-weekdays">${WEEKDAYS.map(d => `<span>${d}</span>`).join('')}</div>
-        <div class="dp-days"></div>
-        <div class="dp-footer">
-          <button type="button" class="dp-footer-btn dp-today">Heute</button>
-          <button type="button" class="dp-footer-btn dp-clear">Löschen</button>
+
+  function buildHTML() {
+    const MONTHS = getMonths();
+    const WEEKDAYS = getWeekdays();
+    wrapper.innerHTML = `
+      <label for="${id}">${t(labelKey)}</label>
+      <div class="datepicker-wrapper" id="${id}-wrapper">
+        <input type="text" class="datepicker-input" id="${id}" readonly placeholder="${t('dpPlaceholder')}">
+        <span class="datepicker-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="3" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M1 7h14" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M5 1v4M11 1v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div class="datepicker-dropdown">
+          <div class="dp-header">
+            <button type="button" class="dp-nav dp-prev-year" title="${t('dpPrevYear')}">&laquo;</button>
+            <button type="button" class="dp-nav dp-prev" title="${t('dpPrevMonth')}">&lsaquo;</button>
+            <button type="button" class="dp-title"></button>
+            <button type="button" class="dp-nav dp-next" title="${t('dpNextMonth')}">&rsaquo;</button>
+            <button type="button" class="dp-nav dp-next-year" title="${t('dpNextYear')}">&raquo;</button>
+          </div>
+          <div class="dp-month-select hidden"></div>
+          <div class="dp-weekdays">${WEEKDAYS.map(d => `<span>${d}</span>`).join('')}</div>
+          <div class="dp-days"></div>
+          <div class="dp-footer">
+            <button type="button" class="dp-footer-btn dp-today">${t('dpToday')}</button>
+            <button type="button" class="dp-footer-btn dp-clear">${t('dpClear')}</button>
+          </div>
         </div>
       </div>
-    </div>
-  `;
+    `;
+    // Restore selected date display
+    if (selectedDate) {
+      wrapper.querySelector('.datepicker-input').value = formatDate(selectedDate);
+    }
+  }
 
-  const input = wrapper.querySelector('.datepicker-input');
-  const dpWrapper = wrapper.querySelector('.datepicker-wrapper');
-  const dropdown = wrapper.querySelector('.datepicker-dropdown');
-  const titleBtn = wrapper.querySelector('.dp-title');
-  const daysContainer = wrapper.querySelector('.dp-days');
-  const monthSelectContainer = wrapper.querySelector('.dp-month-select');
+  buildHTML();
+
+  function getElements() {
+    return {
+      input: wrapper.querySelector('.datepicker-input'),
+      dpWrapper: wrapper.querySelector('.datepicker-wrapper'),
+      dropdown: wrapper.querySelector('.datepicker-dropdown'),
+      titleBtn: wrapper.querySelector('.dp-title'),
+      daysContainer: wrapper.querySelector('.dp-days'),
+      monthSelectContainer: wrapper.querySelector('.dp-month-select'),
+    };
+  }
 
   function renderCalendar() {
+    const MONTHS = getMonths();
+    const { titleBtn, daysContainer, monthSelectContainer } = getElements();
     titleBtn.textContent = `${MONTHS[viewMonth]} ${viewYear}`;
 
-    // Month selector
     monthSelectContainer.innerHTML = MONTHS.map((m, i) =>
       `<button type="button" class="dp-month-opt${i === viewMonth ? ' active' : ''}" data-month="${i}">${m}</button>`
     ).join('');
     monthSelectContainer.classList.toggle('hidden', !showMonthSelect);
 
-    // Days grid
     const firstDay = new Date(viewYear, viewMonth, 1);
-    let startWeekday = firstDay.getDay() - 1; // Monday = 0
+    let startWeekday = firstDay.getDay() - 1;
     if (startWeekday < 0) startWeekday = 6;
 
     const totalDays = daysInMonth(viewYear, viewMonth);
@@ -70,13 +91,11 @@ function createDatepicker(id, label, onChange) {
 
     let html = '';
 
-    // Previous month trailing days
     for (let i = startWeekday - 1; i >= 0; i--) {
       const day = prevMonthDays - i;
       html += `<button type="button" class="dp-day other-month" data-year="${viewMonth === 0 ? viewYear - 1 : viewYear}" data-month="${viewMonth === 0 ? 11 : viewMonth - 1}" data-day="${day}">${day}</button>`;
     }
 
-    // Current month days
     for (let d = 1; d <= totalDays; d++) {
       const isToday = d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
       const isSelected = selectedDate && d === selectedDate.getDate() && viewMonth === selectedDate.getMonth() && viewYear === selectedDate.getFullYear();
@@ -86,7 +105,6 @@ function createDatepicker(id, label, onChange) {
       html += `<button type="button" class="${cls.join(' ')}" data-year="${viewYear}" data-month="${viewMonth}" data-day="${d}">${d}</button>`;
     }
 
-    // Next month leading days
     const totalCells = startWeekday + totalDays;
     const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
     for (let d = 1; d <= remaining; d++) {
@@ -98,6 +116,7 @@ function createDatepicker(id, label, onChange) {
 
   function selectDate(date) {
     selectedDate = date;
+    const { input } = getElements();
     input.value = date ? formatDate(date) : '';
     renderCalendar();
     onChange(date);
@@ -110,24 +129,25 @@ function createDatepicker(id, label, onChange) {
     }
     showMonthSelect = false;
     renderCalendar();
-    dpWrapper.classList.add('open');
+    getElements().dpWrapper.classList.add('open');
   }
 
   function close() {
-    dpWrapper.classList.remove('open');
+    getElements().dpWrapper.classList.remove('open');
     showMonthSelect = false;
   }
 
-  // Event listeners
-  input.addEventListener('click', () => {
-    if (dpWrapper.classList.contains('open')) {
-      close();
-    } else {
-      open();
+  wrapper.addEventListener('click', (e) => {
+    const { input, dpWrapper } = getElements();
+    if (e.target === input || e.target.closest('.datepicker-icon')) {
+      if (dpWrapper.classList.contains('open')) {
+        close();
+      } else {
+        open();
+      }
+      return;
     }
-  });
 
-  dropdown.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
 
@@ -172,21 +192,24 @@ function createDatepicker(id, label, onChange) {
     }
   });
 
-  // Close on outside click
   document.addEventListener('click', (e) => {
     if (!wrapper.contains(e.target)) {
       close();
     }
   });
 
-  return { element: wrapper, getDate: () => selectedDate };
+  return {
+    element: wrapper,
+    getDate: () => selectedDate,
+    rebuild: () => { buildHTML(); renderCalendar(); },
+  };
 }
 
 // ── Page Content ──────────────────────────────────────────────────
 
 function renderImpressumPage() {
   return `
-    <a href="#" class="back-link">&larr; Zurück zum Rechner</a>
+    <a href="#" class="back-link">${t('backToCalculator')}</a>
     <section class="page-content">
       <h1>Impressum</h1>
       <p>Angaben gemäß § 5 DDG</p>
@@ -231,7 +254,7 @@ function renderImpressumPage() {
 
 function renderDatenschutzPage() {
   return `
-    <a href="#" class="back-link">&larr; Zurück zum Rechner</a>
+    <a href="#" class="back-link">${t('backToCalculator')}</a>
     <section class="page-content">
       <h1>Datenschutzerklärung</h1>
 
@@ -292,39 +315,39 @@ function renderDatenschutzPage() {
 
 function renderKontaktPage() {
   return `
-    <a href="#" class="back-link">&larr; Zurück zum Rechner</a>
+    <a href="#" class="back-link">${t('backToCalculator')}</a>
     <section class="page-content">
-      <h1>Kontakt</h1>
-      <p class="contact-intro">Anregungen, Fehler oder Feedback? Schreib mir eine Nachricht:</p>
+      <h1>${t('kontaktTitle')}</h1>
+      <p class="contact-intro">${t('kontaktIntro')}</p>
       <form id="contact-form" class="contact-form" action="https://formsubmit.co/info@era-rechner.de" method="POST">
         <input type="hidden" name="_subject" value="TFW-Rechner: Kontaktformular">
         <input type="hidden" name="_captcha" value="true">
         <input type="hidden" name="_next" value="${window.location.origin}${window.location.pathname}#kontakt-success">
         <input type="text" name="_honey" style="display:none">
         <div class="form-group">
-          <label for="contact-name">Name</label>
+          <label for="contact-name">${t('kontaktName')}</label>
           <input type="text" id="contact-name" name="name" required>
         </div>
         <div class="form-group">
-          <label for="contact-email">E-Mail</label>
+          <label for="contact-email">${t('kontaktEmail')}</label>
           <input type="email" id="contact-email" name="email" required>
         </div>
         <div class="form-group">
-          <label for="contact-subject">Betreff</label>
+          <label for="contact-subject">${t('kontaktBetreff')}</label>
           <select id="contact-subject" name="subject">
-            <option value="Feedback">Feedback</option>
-            <option value="Bug">Fehler melden</option>
-            <option value="Feature">Verbesserungsvorschlag</option>
-            <option value="Sonstiges">Sonstiges</option>
+            <option value="Feedback">${t('kontaktFeedback')}</option>
+            <option value="Bug">${t('kontaktBug')}</option>
+            <option value="Feature">${t('kontaktFeature')}</option>
+            <option value="Sonstiges">${t('kontaktSonstiges')}</option>
           </select>
         </div>
         <div class="form-group">
-          <label for="contact-message">Nachricht</label>
+          <label for="contact-message">${t('kontaktNachricht')}</label>
           <textarea id="contact-message" name="message" rows="4" required></textarea>
         </div>
-        <button type="submit" class="contact-submit">Nachricht senden</button>
+        <button type="submit" class="contact-submit">${t('kontaktSenden')}</button>
       </form>
-      <p class="contact-success hidden" id="contact-success">Danke für deine Nachricht! Sie wurde erfolgreich gesendet.</p>
+      <p class="contact-success hidden" id="contact-success">${t('kontaktSuccess')}</p>
     </section>
   `;
 }
@@ -333,29 +356,60 @@ function renderKontaktPage() {
 
 const app = document.querySelector('#app');
 const header = document.querySelector('header');
+const titleEl = header.querySelector('h1');
+const subtitleEl = header.querySelector('.subtitle');
 let calculatorEl = null;
 let vonDate = null;
 let bisDate = null;
+let bruttoValue = null;
 let vonPicker = null;
 let bisPicker = null;
 let resultDiv = null;
+
+function formatCurrency(value) {
+  return value.toLocaleString(getLang() === 'en' ? 'en-DE' : 'de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }) + ' \u20AC';
+}
 
 function buildCalculator() {
   const calculator = document.createElement('div');
   calculator.className = 'calculator';
 
-  vonPicker = createDatepicker('von', 'Zeitraum von', (date) => {
+  vonPicker = createDatepicker('von', 'labelVon', (date) => {
     vonDate = date;
     updateResult();
   });
 
-  bisPicker = createDatepicker('bis', 'Zeitraum bis', (date) => {
+  bisPicker = createDatepicker('bis', 'labelBis', (date) => {
     bisDate = date;
     updateResult();
   });
 
   calculator.appendChild(vonPicker.element);
   calculator.appendChild(bisPicker.element);
+
+  // Bruttogehalt input with tooltip
+  const bruttoGroup = document.createElement('div');
+  bruttoGroup.className = 'form-group';
+  bruttoGroup.id = 'brutto-group';
+  bruttoGroup.innerHTML = `
+    <label for="brutto" class="label-with-tooltip">
+      ${t('labelBrutto')}
+      <span class="label-info" title="${t('bruttoTooltip')}">&#9432;</span>
+    </label>
+    <div class="input-euro-group">
+      <input type="number" id="brutto" min="0" step="1" placeholder="${t('bruttoPlaceholder')}" value="">
+      <span class="input-euro-suffix">\u20AC</span>
+    </div>
+  `;
+  bruttoGroup.querySelector('#brutto').addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    bruttoValue = isNaN(val) || val <= 0 ? null : val;
+    updateResult();
+  });
+  calculator.appendChild(bruttoGroup);
 
   resultDiv = document.createElement('div');
   resultDiv.className = 'result hidden';
@@ -377,8 +431,8 @@ function updateResult() {
     resultDiv.classList.remove('hidden');
     resultDiv.innerHTML = `
       <div class="result-row">
-        <span class="result-label">Ungültiger Zeitraum</span>
-        <span class="result-value" style="color: var(--color-accent);">Enddatum muss nach Startdatum liegen</span>
+        <span class="result-label">${t('resultUngueltig')}</span>
+        <span class="result-value" style="color: var(--color-accent);">${t('resultUngueltigHint')}</span>
       </div>
     `;
     return;
@@ -390,24 +444,24 @@ function updateResult() {
 
   html += `
     <div class="result-row">
-      <span class="result-label">Zeitraum</span>
-      <span class="result-value">${formatDate(vonDate)} – ${formatDate(bisDate)}</span>
+      <span class="result-label">${t('resultZeitraum')}</span>
+      <span class="result-value">${formatDate(vonDate)} \u2013 ${formatDate(bisDate)}</span>
     </div>
   `;
 
   html += `
     <div class="result-row highlight">
-      <span class="result-label">Ganze Monate</span>
-      <span class="result-value">${ganzeMonateFlag ? 'Ja' : 'Nein'}</span>
+      <span class="result-label">${t('resultGanzeMonate')}</span>
+      <span class="result-value">${ganzeMonateFlag ? t('resultJa') : t('resultNein')}</span>
     </div>
   `;
 
   if (ganzeMonateFlag) {
     html += `
       <div class="breakdown">
-        <div class="breakdown-title">Aufschlüsselung</div>
+        <div class="breakdown-title">${t('breakdownTitle')}</div>
         <div class="breakdown-row">
-          <span class="breakdown-label">Anzahl voller Monate</span>
+          <span class="breakdown-label">${t('breakdownVolleMonate')}</span>
           <span class="breakdown-value">${anzahlMonate}</span>
         </div>
       </div>
@@ -415,29 +469,100 @@ function updateResult() {
   } else {
     html += `
       <div class="breakdown">
-        <div class="breakdown-title">Aufschlüsselung</div>
+        <div class="breakdown-title">${t('breakdownTitle')}</div>
         ${restTageVor > 0 ? `
         <div class="breakdown-row">
-          <span class="breakdown-label">Resttage am Anfang</span>
-          <span class="breakdown-value">${restTageVor} Tage</span>
+          <span class="breakdown-label">${t('breakdownResttageAnfang')}</span>
+          <span class="breakdown-value">${restTageVor} ${t('breakdownTage')}</span>
         </div>
         ` : ''}
         <div class="breakdown-row">
-          <span class="breakdown-label">Volle Monate</span>
+          <span class="breakdown-label">${t('breakdownVolleMonateLabel')}</span>
           <span class="breakdown-value">${anzahlMonate}</span>
         </div>
         ${restTageNach > 0 ? `
         <div class="breakdown-row">
-          <span class="breakdown-label">Resttage am Ende</span>
-          <span class="breakdown-value">${restTageNach} Tage</span>
+          <span class="breakdown-label">${t('breakdownResttageEnde')}</span>
+          <span class="breakdown-value">${restTageNach} ${t('breakdownTage')}</span>
         </div>
         ` : ''}
       </div>
     `;
   }
 
+  // Salary calculation if Bruttogehalt is set
+  if (bruttoValue) {
+    // Calculate total days in period
+    const diffTime = bisDate.getTime() - vonDate.getTime();
+    const totalCalendarDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    // Calculate proportional salary:
+    // Full months get full salary, partial months get daily rate
+    let totalSalary = anzahlMonate * bruttoValue;
+
+    if (restTageVor > 0) {
+      const daysInStartMonth = daysInMonth(vonDate.getFullYear(), vonDate.getMonth());
+      totalSalary += (restTageVor / daysInStartMonth) * bruttoValue;
+    }
+
+    if (restTageNach > 0) {
+      const daysInEndMonth = daysInMonth(bisDate.getFullYear(), bisDate.getMonth());
+      totalSalary += (restTageNach / daysInEndMonth) * bruttoValue;
+    }
+
+    html += `
+      <div class="breakdown">
+        <div class="breakdown-row highlight">
+          <span class="breakdown-label" style="font-weight:600; color: var(--color-primary);">${t('breakdownGehalt')}</span>
+          <span class="breakdown-value" style="color: var(--color-primary);">${formatCurrency(totalSalary)}</span>
+        </div>
+      </div>
+    `;
+  }
+
   resultDiv.classList.remove('hidden');
   resultDiv.innerHTML = html;
+}
+
+function updateLangButtons() {
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.lang === getLang());
+  });
+}
+
+function rebuildPage() {
+  // Update header
+  titleEl.textContent = t('title');
+  subtitleEl.textContent = t('subtitle');
+
+  // Update footer
+  const footerLinks = document.querySelector('.footer-links');
+  if (footerLinks) {
+    footerLinks.innerHTML = `
+      <a href="#kontakt" data-nav="kontakt">${t('footerKontakt')}</a>
+      <span class="footer-sep">&middot;</span>
+      <a href="#impressum" data-nav="impressum">${t('footerImpressum')}</a>
+      <span class="footer-sep">&middot;</span>
+      <a href="#datenschutz" data-nav="datenschutz">${t('footerDatenschutz')}</a>
+    `;
+    // Re-attach footer nav handlers
+    footerLinks.querySelectorAll('[data-nav]').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.hash = link.dataset.nav;
+      });
+    });
+  }
+
+  updateLangButtons();
+
+  // Force rebuild calculator on next navigate
+  calculatorEl = null;
+  vonDate = null;
+  bisDate = null;
+  bruttoValue = null;
+
+  handleHash();
 }
 
 function navigate(page) {
@@ -482,6 +607,21 @@ function handleHash() {
   navigate(hash || 'home');
 }
 
+// ── Language switcher ─────────────────────────────────────────────
+
+function initLangSwitch() {
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lang = btn.dataset.lang;
+      if (lang !== getLang()) {
+        setLang(lang);
+        rebuildPage();
+      }
+    });
+  });
+  updateLangButtons();
+}
+
 // Navigation via footer links
 document.querySelectorAll('[data-nav]').forEach(link => {
   link.addEventListener('click', (e) => {
@@ -491,4 +631,10 @@ document.querySelectorAll('[data-nav]').forEach(link => {
 });
 
 window.addEventListener('hashchange', handleHash);
+
+// Initialize
+document.documentElement.lang = getLang();
+titleEl.textContent = t('title');
+subtitleEl.textContent = t('subtitle');
+initLangSwitch();
 handleHash();
