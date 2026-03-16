@@ -850,6 +850,22 @@ footer p + p {
   text-decoration: underline;
 }
 
+.footer-feedback {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.footer-feedback a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.footer-feedback a:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
 /* Contact Form */
 .contact-section {
   margin-top: 2rem;
