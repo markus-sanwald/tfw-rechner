@@ -118,6 +118,48 @@ header h1 {
   letter-spacing: 0.025em;
 }
 
+.label-with-tooltip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.label-info {
+  position: relative;
+  font-size: 0.9rem;
+  color: var(--color-primary-light);
+  cursor: help;
+  line-height: 1;
+}
+
+.label-info::after {
+  content: attr(title);
+  display: none;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(100% + 8px);
+  width: 260px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  z-index: 20;
+  pointer-events: none;
+  white-space: normal;
+}
+
+.label-info:hover::after {
+  display: block;
+}
+
 .checkbox-group {
   flex-direction: row;
   align-items: center;
@@ -846,6 +888,22 @@ footer p + p {
 }
 
 .footer-donate a:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.footer-feedback {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.footer-feedback a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.footer-feedback a:hover {
   color: var(--color-primary);
   text-decoration: underline;
 }

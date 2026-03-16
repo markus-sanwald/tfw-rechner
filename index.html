@@ -9,10 +9,24 @@
 <body>
   <div class="container">
     <header>
+      <div class="lang-switch">
+        <button class="lang-btn active" data-lang="de">DE</button>
+        <button class="lang-btn" data-lang="en">EN</button>
+      </div>
       <h1>TFW Rechner</h1>
       <p class="subtitle">Tarifvertrag für die Fleischwirtschaft</p>
     </header>
     <main id="app"></main>
+
+    <footer>
+      <p class="footer-links">
+        <a href="#kontakt" data-nav="kontakt">Kontakt</a>
+        <span class="footer-sep">&middot;</span>
+        <a href="#impressum" data-nav="impressum">Impressum</a>
+        <span class="footer-sep">&middot;</span>
+        <a href="#datenschutz" data-nav="datenschutz">Datenschutz</a>
+      </p>
+    </footer>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>
