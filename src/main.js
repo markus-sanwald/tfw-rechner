@@ -362,6 +362,7 @@ let calculatorEl = null;
 let vonDate = null;
 let bisDate = null;
 let bruttoValue = null;
+let guthabenValue = null;
 let vonPicker = null;
 let bisPicker = null;
 let resultDiv = null;
@@ -410,6 +411,24 @@ function buildCalculator() {
     updateResult();
   });
   calculator.appendChild(bruttoGroup);
+
+  // TFW-Guthaben input
+  const guthabenGroup = document.createElement('div');
+  guthabenGroup.className = 'form-group';
+  guthabenGroup.id = 'guthaben-group';
+  guthabenGroup.innerHTML = `
+    <label for="guthaben">${t('labelGuthaben')}</label>
+    <div class="input-euro-group">
+      <input type="number" id="guthaben" min="0" step="0.01" placeholder="${t('guthabenPlaceholder')}" value="">
+      <span class="input-euro-suffix">\u20AC</span>
+    </div>
+  `;
+  guthabenGroup.querySelector('#guthaben').addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    guthabenValue = isNaN(val) || val < 0 ? null : val;
+    updateResult();
+  });
+  calculator.appendChild(guthabenGroup);
 
   resultDiv = document.createElement('div');
   resultDiv.className = 'result hidden';
@@ -518,6 +537,32 @@ function updateResult() {
         </div>
       </div>
     `;
+
+    // Show remaining TFW balance if Guthaben is set
+    if (guthabenValue != null) {
+      const restguthaben = guthabenValue - totalSalary;
+      const color = restguthaben >= 0 ? '#2e6b2e' : 'var(--color-accent)';
+      html += `
+        <div class="breakdown">
+          <div class="breakdown-row highlight">
+            <span class="breakdown-label" style="font-weight:600; color: ${color};">${t('breakdownRestguthaben')}</span>
+            <span class="breakdown-value" style="color: ${color};">${formatCurrency(restguthaben)}</span>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  // Show remaining TFW balance even without salary (just subtract 0)
+  if (!bruttoValue && guthabenValue != null) {
+    html += `
+      <div class="breakdown">
+        <div class="breakdown-row highlight">
+          <span class="breakdown-label" style="font-weight:600; color: #2e6b2e;">${t('breakdownRestguthaben')}</span>
+          <span class="breakdown-value" style="color: #2e6b2e;">${formatCurrency(guthabenValue)}</span>
+        </div>
+      </div>
+    `;
   }
 
   resultDiv.classList.remove('hidden');
@@ -561,6 +606,7 @@ function rebuildPage() {
   vonDate = null;
   bisDate = null;
   bruttoValue = null;
+  guthabenValue = null;
 
   handleHash();
 }
