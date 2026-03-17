@@ -628,7 +628,7 @@
         fristMonate = 6;
         fristText = t('fristLang');
       }
-      var fristDatum = new Date(vonDate.getFullYear(), vonDate.getMonth() - fristMonate, 1);
+      var fristDatum = new Date(vonDate.getFullYear(), vonDate.getMonth() - fristMonate + 1, 0);
       html += '<div class="info-box">';
       html += '<div class="info-box-title">' + t('fristTitle') + '</div>';
       html += '<p>' + fristText + '</p>';
