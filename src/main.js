@@ -1116,6 +1116,7 @@
     var footer = document.querySelector('footer');
     if (footer) {
       footer.innerHTML =
+        '<p class="footer-feedback">' + t('footerOpenSource') + '</p>' +
         '<p class="footer-feedback">' + t('footerFeedback') + ' <a href="mailto:info@tfw-rechner.de">info@tfw-rechner.de</a></p>' +
         '<p class="footer-links">' +
         '<a href="#impressum" data-nav="impressum">' + t('footerImpressum') + '</a>' +
