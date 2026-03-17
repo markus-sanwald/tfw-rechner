@@ -75,3 +75,6 @@ npm test           # Unit-Tests ausführen
 npm run build      # Produktions-Build
 ```
 
+## Lizenz
+
+Dieses Projekt steht unter der [MIT-Lizenz](LICENSE).
