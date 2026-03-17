@@ -434,9 +434,9 @@
     sonderzahlungenGroup.innerHTML =
       '<label>' + t('labelSonderzahlungen') + '</label>' +
       '<div class="checkbox-group">' +
-      '<label class="checkbox-label"><input type="checkbox" id="sz-urlaubsgeld"> ' + t('sonderzahlungUrlaubsgeld') + '</label>' +
-      '<label class="checkbox-label"><input type="checkbox" id="sz-weihnachtsgeld"> ' + t('sonderzahlungWeihnachtsgeld') + '</label>' +
-      '<label class="checkbox-label"><input type="checkbox" id="sz-tzug"> ' + t('sonderzahlungTzug') + '</label>' +
+      '<label class="checkbox-label"><input type="checkbox" id="sz-urlaubsgeld"> ' + t('sonderzahlungUrlaubsgeld') + ' <span class="label-info" title="' + t('szTooltipUrlaubsgeld') + '">&#9432;</span></label>' +
+      '<label class="checkbox-label"><input type="checkbox" id="sz-weihnachtsgeld"> ' + t('sonderzahlungWeihnachtsgeld') + ' <span class="label-info" title="' + t('szTooltipWeihnachtsgeld') + '">&#9432;</span></label>' +
+      '<label class="checkbox-label"><input type="checkbox" id="sz-tzug"> ' + t('sonderzahlungTzug') + ' <span class="label-info" title="' + t('szTooltipTzug') + '">&#9432;</span></label>' +
       '</div>';
     sonderzahlungenGroup.querySelector('#sz-urlaubsgeld').addEventListener('change', function(e) {
       sonderzahlungen.urlaubsgeld = e.target.checked;
@@ -576,7 +576,7 @@
     // Blauer Kasten: Saldo
     // Sonderzahlungen sind Einbringungen (Guthaben-Seite)
     var totalGuthaben = (guthabenValue || 0) + tfwAnsparenValue + sonderzahlungenTotal;
-    if (bruttoValue && (guthabenValue != null || tfwAnsparenValue > 0 || sonderzahlungenTotal > 0)) {
+    if (bruttoValue) {
       var saldo = totalGuthaben - totalSalary;
       var saldoColor = saldo >= 0 ? '#2e6b2e' : 'var(--color-accent)';
       html += '<div class="result-row highlight"><span class="result-label">' + t('resultSaldo') + '</span><span class="result-value" style="color: ' + saldoColor + ';">' + formatCurrency(saldo) + '</span></div>';
@@ -630,6 +630,257 @@
       html += '</div>';
     }
 
+    // Burndown-Chart (Flächendiagramm)
+    if (bruttoValue) {
+      var MONTHS = getMonths();
+      var timelineMonths = [];
+      var tmStart = new Date(jetztJahr, jetztMonat, 1);
+      var tmEnd = new Date(bisDate.getFullYear(), bisDate.getMonth(), 1);
+      var tmCur = new Date(tmStart);
+      while (tmCur <= tmEnd) {
+        timelineMonths.push({ year: tmCur.getFullYear(), month: tmCur.getMonth() });
+        tmCur = new Date(tmCur.getFullYear(), tmCur.getMonth() + 1, 1);
+      }
+
+      if (timelineMonths.length > 1 && timelineMonths.length <= 60) {
+        var monthlyAnsparen = 0;
+        if (tfwStundenValue && bruttoValue) {
+          var msStd = wochenstundenValue * 52 / 12;
+          monthlyAnsparen = tfwStundenValue * (bruttoValue / msStd);
+        }
+
+        var szEvents = [];
+        if (sonderzahlungen.urlaubsgeld && bruttoValue) {
+          szEvents.push({ month: 5, betrag: bruttoValue * 0.69, label: t('timelineUrlaubsgeld'), color: '#f59e0b' });
+        }
+        if (sonderzahlungen.weihnachtsgeld && bruttoValue) {
+          szEvents.push({ month: 10, betrag: bruttoValue * 0.55, label: t('timelineWeihnachtsgeld'), color: '#8b5cf6' });
+        }
+        if (sonderzahlungen.tzug) {
+          if (bruttoValue) {
+            szEvents.push({ month: 6, betrag: bruttoValue * 0.275, label: t('timelineTzugA'), color: '#ec4899' });
+          }
+          szEvents.push({ month: 1, betrag: ECKENTGELT_BW * 0.265, label: t('timelineTzugB'), color: '#14b8a6' });
+        }
+
+        // Kumulativen Kontostand berechnen
+        var points = []; // {label, balance, isAnspar, szHits: []}
+        var balance = guthabenValue || 0;
+        var szMarkers = [];
+
+        for (var ti = 0; ti < timelineMonths.length; ti++) {
+          var tm = timelineMonths[ti];
+          var isAnspar = tm.year < tfwStartJ || (tm.year === tfwStartJ && tm.month < tfwStartM);
+          var szHits = [];
+
+          var monatAnsparen = 0;
+          var monatEntnahme = 0;
+          if (isAnspar) {
+            monatAnsparen = monthlyAnsparen;
+            balance += monthlyAnsparen;
+            for (var si = 0; si < szEvents.length; si++) {
+              if (tm.month === szEvents[si].month && !(tm.year === jetztJahr && tm.month <= jetztMonat)) {
+                balance += szEvents[si].betrag;
+                szHits.push(szEvents[si]);
+              }
+            }
+          } else {
+            // Entnahme: anteilig für Randmonate
+            var isFirstMonth = (tm.year === vonDate.getFullYear() && tm.month === vonDate.getMonth());
+            var isLastMonth = (tm.year === bisDate.getFullYear() && tm.month === bisDate.getMonth());
+            monatEntnahme = bruttoValue;
+            if (isFirstMonth && restTageVor > 0) {
+              monatEntnahme = (analyse.arbeitstageVor / analyse.arbeitstageVorGesamt) * bruttoValue;
+            } else if (isLastMonth && restTageNach > 0) {
+              monatEntnahme = (analyse.arbeitstageNach / analyse.arbeitstageNachGesamt) * bruttoValue;
+            }
+            balance -= monatEntnahme;
+          }
+
+          points.push({
+            label: MONTHS[tm.month] + (ti === 0 || tm.month === 0 ? ' ' + tm.year : ''),
+            balance: balance,
+            isAnspar: isAnspar,
+            szHits: szHits,
+            ansparen: monatAnsparen,
+            entnahme: monatEntnahme
+          });
+
+          for (var sj = 0; sj < szHits.length; sj++) {
+            szMarkers.push({ index: ti, sz: szHits[sj], balance: balance });
+          }
+        }
+
+        // SVG Dimensionen
+        var svgW = 600, svgH = 240;
+        var padL = 50, padR = 15, padT = 45, padB = 35;
+        var chartW = svgW - padL - padR;
+        var chartH = svgH - padT - padB;
+
+        // Y-Achse: min/max bestimmen
+        var minBal = 0, maxBal = 0;
+        for (var pi = 0; pi < points.length; pi++) {
+          if (points[pi].balance < minBal) minBal = points[pi].balance;
+          if (points[pi].balance > maxBal) maxBal = points[pi].balance;
+        }
+        var startBal = guthabenValue || 0;
+        if (startBal > maxBal) maxBal = startBal;
+        if (startBal < minBal) minBal = startBal;
+        var range = maxBal - minBal;
+        if (range === 0) range = 1000;
+        maxBal += range * 0.1;
+        minBal -= range * 0.1;
+
+        function yPos(val) { return padT + chartH - ((val - minBal) / (maxBal - minBal)) * chartH; }
+        function xPos(idx) { return padL + (idx / (points.length - 1)) * chartW; }
+
+        var yZero = yPos(0);
+
+        // SVG bauen
+        var chartId = 'burndown-' + Date.now();
+        var svg = '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" class="burndown-svg" id="' + chartId + '">';
+
+        // Phasen-Hintergrund und Header-Banner
+        var ansparEndIdx = -1;
+        for (var ai = 0; ai < points.length; ai++) {
+          if (points[ai].isAnspar) ansparEndIdx = ai;
+        }
+        var stepW = chartW / (points.length - 1);
+        if (ansparEndIdx >= 0) {
+          var phaseX = padL;
+          var phaseBorderX = xPos(ansparEndIdx) + stepW * 0.5;
+          var phaseW = phaseBorderX - padL;
+          var freiW = padL + chartW - phaseBorderX;
+          // Hintergrund-Flächen (stärker)
+          svg += '<rect x="' + phaseX + '" y="' + padT + '" width="' + phaseW + '" height="' + chartH + '" fill="rgba(59,130,246,0.08)"/>';
+          svg += '<rect x="' + phaseBorderX + '" y="' + padT + '" width="' + freiW + '" height="' + chartH + '" fill="rgba(226,0,26,0.08)"/>';
+          // Phasen-Trennlinie
+          svg += '<line x1="' + phaseBorderX + '" y1="0" x2="' + phaseBorderX + '" y2="' + (svgH - padB) + '" stroke="#9ca3af" stroke-width="1" stroke-dasharray="6,4"/>';
+          // Header-Banner oben
+          svg += '<rect x="' + phaseX + '" y="0" width="' + phaseW + '" height="' + (padT - 5) + '" rx="4" fill="#3b82f6" opacity="0.12"/>';
+          svg += '<text x="' + (phaseX + phaseW / 2) + '" y="' + ((padT - 5) / 2 + 5) + '" text-anchor="middle" class="phase-label" fill="#2563eb">' + t('timelineAnsparphase') + '</text>';
+          svg += '<rect x="' + phaseBorderX + '" y="0" width="' + freiW + '" height="' + (padT - 5) + '" rx="4" fill="#e2001a" opacity="0.12"/>';
+          svg += '<text x="' + (phaseBorderX + freiW / 2) + '" y="' + ((padT - 5) / 2 + 5) + '" text-anchor="middle" class="phase-label" fill="#e2001a">' + t('timelineFreistellung') + '</text>';
+        }
+
+        // Nulllinie
+        if (minBal < 0) {
+          svg += '<line x1="' + padL + '" y1="' + yZero + '" x2="' + (padL + chartW) + '" y2="' + yZero + '" stroke="#999" stroke-width="0.5" stroke-dasharray="4,3"/>';
+          svg += '<text x="' + (padL - 5) + '" y="' + (yZero + 3) + '" text-anchor="end" class="axis-label">0</text>';
+        }
+
+        // Fläche: grün (über 0)
+        var linePoints = '';
+        linePoints += padL + ',' + yPos(startBal) + ' ';
+        for (var lp = 0; lp < points.length; lp++) {
+          linePoints += xPos(lp) + ',' + yPos(points[lp].balance) + ' ';
+        }
+        var areaGreen = padL + ',' + Math.min(yZero, yPos(startBal)) + ' ';
+        for (var ag = 0; ag < points.length; ag++) {
+          var yVal = yPos(points[ag].balance);
+          areaGreen += xPos(ag) + ',' + Math.min(yZero, yVal) + ' ';
+        }
+        for (var agr = points.length - 1; agr >= 0; agr--) {
+          areaGreen += xPos(agr) + ',' + yZero + ' ';
+        }
+        areaGreen += padL + ',' + yZero;
+        svg += '<polygon points="' + areaGreen + '" fill="rgba(34,197,94,0.2)"/>';
+
+        // Fläche rot (unter 0)
+        if (minBal < 0) {
+          var areaRed = padL + ',' + Math.max(yZero, yPos(startBal)) + ' ';
+          for (var ar = 0; ar < points.length; ar++) {
+            var yValR = yPos(points[ar].balance);
+            areaRed += xPos(ar) + ',' + Math.max(yZero, yValR) + ' ';
+          }
+          for (var arr = points.length - 1; arr >= 0; arr--) {
+            areaRed += xPos(arr) + ',' + yZero + ' ';
+          }
+          areaRed += padL + ',' + yZero;
+          svg += '<polygon points="' + areaRed + '" fill="rgba(226,0,26,0.15)"/>';
+        }
+
+        // Linie
+        svg += '<polyline points="' + linePoints + '" fill="none" stroke="#003d6b" stroke-width="2" stroke-linejoin="round"/>';
+
+        // Startpunkt (Guthaben)
+        svg += '<circle cx="' + padL + '" cy="' + yPos(startBal) + '" r="4" fill="#22c55e" stroke="#fff" stroke-width="1.5"/>';
+        if (startBal > 0) {
+          svg += '<text x="' + Math.max(padL, padL + 2) + '" y="' + (yPos(startBal) - 10) + '" text-anchor="start" class="sz-marker-label" fill="#22c55e">' + t('timelineGuthaben') + '</text>';
+        }
+
+        // Datenpunkte
+        for (var dp = 0; dp < points.length; dp++) {
+          var dotColor = points[dp].isAnspar ? '#3b82f6' : '#e2001a';
+          svg += '<circle cx="' + xPos(dp) + '" cy="' + yPos(points[dp].balance) + '" r="3" fill="' + dotColor + '" stroke="#fff" stroke-width="1.5"/>';
+        }
+
+        // Sonderzahlungs-Marker
+        for (var mk = 0; mk < szMarkers.length; mk++) {
+          var m = szMarkers[mk];
+          var mx = xPos(m.index);
+          var my = yPos(m.balance);
+          svg += '<circle cx="' + mx + '" cy="' + my + '" r="6" fill="' + m.sz.color + '" stroke="#fff" stroke-width="2"/>';
+          svg += '<text x="' + mx + '" y="' + (my - 10) + '" text-anchor="middle" class="sz-marker-label" fill="' + m.sz.color + '">' + m.sz.label + '</text>';
+        }
+
+        // Y-Achse Werte
+        var yLabels = [maxBal, (maxBal + minBal) / 2, minBal];
+        for (var yl = 0; yl < yLabels.length; yl++) {
+          var yv = yLabels[yl];
+          var yy = yPos(yv);
+          if (Math.abs(yv) > 0.01 || yl === 1) {
+            svg += '<text x="' + (padL - 5) + '" y="' + (yy + 3) + '" text-anchor="end" class="axis-label">' + Math.round(yv).toLocaleString(getLang() === 'en' ? 'en-US' : 'de-DE') + ' \u20AC</text>';
+            svg += '<line x1="' + padL + '" y1="' + yy + '" x2="' + (padL + chartW) + '" y2="' + yy + '" stroke="#e5e7eb" stroke-width="0.5"/>';
+          }
+        }
+
+        // X-Achse Labels
+        var labelStep = points.length > 12 ? Math.ceil(points.length / 12) : 1;
+        for (var xl = 0; xl < points.length; xl++) {
+          if (xl % labelStep === 0 || xl === points.length - 1) {
+            svg += '<text x="' + xPos(xl) + '" y="' + (svgH - 5) + '" text-anchor="middle" class="axis-label">' + points[xl].label + '</text>';
+          }
+        }
+
+        // Unsichtbare Klick-Bereiche pro Monat (Startpunkt + Datenpunkte)
+        svg += '<rect class="bd-hitarea" data-bd-idx="-1" x="' + (padL - stepW * 0.5) + '" y="' + padT + '" width="' + stepW + '" height="' + chartH + '" fill="transparent" style="cursor:pointer"/>';
+        for (var hi = 0; hi < points.length; hi++) {
+          var hx = xPos(hi) - stepW * 0.5;
+          svg += '<rect class="bd-hitarea" data-bd-idx="' + hi + '" x="' + hx + '" y="' + padT + '" width="' + stepW + '" height="' + chartH + '" fill="transparent" style="cursor:pointer"/>';
+        }
+
+        svg += '</svg>';
+
+        // Tooltip-Container
+        html += '<div class="timeline-chart" style="position:relative;">';
+        html += '<div class="breakdown-title">' + t('timelineTitle') + '</div>';
+        html += svg;
+        html += '<div class="bd-tooltip" id="' + chartId + '-tip" style="display:none;"></div>';
+
+        // Legende
+        html += '<div class="timeline-legend">';
+        if (startBal > 0) {
+          html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:#22c55e;"></span>' + t('timelineGuthaben') + '</div>';
+        }
+        if (monthlyAnsparen > 0) {
+          html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:#3b82f6;"></span>' + t('timelineAnsparen') + '</div>';
+        }
+        for (var sn = 0; sn < szEvents.length; sn++) {
+          html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:' + szEvents[sn].color + ';border-radius:50%;"></span>' + szEvents[sn].label + '</div>';
+        }
+        html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:var(--color-accent);"></span>' + t('timelineEntnahme') + '</div>';
+        html += '</div>';
+        html += '</div>';
+
+        // Tooltip-Daten merken für Event-Listener
+        var bdTooltipData = [{ label: t('timelineGuthaben'), balance: startBal, szHits: [], ansparen: 0, entnahme: 0 }];
+        for (var bd = 0; bd < points.length; bd++) {
+          bdTooltipData.push({ label: points[bd].label, balance: points[bd].balance, szHits: points[bd].szHits, isAnspar: points[bd].isAnspar, ansparen: points[bd].ansparen, entnahme: points[bd].entnahme });
+        }
+      }
+    }
+
     // Beantragungsfristen Info-Text
     if (vonDate) {
       var gesamtMonateDauer = anzahlMonate + (restTageVor > 0 ? 1 : 0) + (restTageNach > 0 ? 1 : 0);
@@ -658,6 +909,57 @@
 
     resultDiv.classList.remove('hidden');
     resultDiv.innerHTML = html;
+
+    // Tooltip-Interaktion für Burndown-Chart
+    if (typeof chartId !== 'undefined' && typeof bdTooltipData !== 'undefined') {
+      var svgEl = document.getElementById(chartId);
+      var tipEl = document.getElementById(chartId + '-tip');
+      if (svgEl && tipEl) {
+        function showBdTooltip(e, rect) {
+          var idx = parseInt(rect.getAttribute('data-bd-idx'));
+          var d = bdTooltipData[idx + 1]; // +1 weil startpunkt bei -1
+          if (!d) return;
+          var lines = '<strong>' + d.label + '</strong>';
+          lines += '<br>' + t('resultSaldo') + ': <strong>' + formatCurrency(d.balance) + '</strong>';
+          if (d.ansparen > 0) {
+            lines += '<br>+ ' + t('timelineAnsparen') + ': ' + formatCurrency(d.ansparen);
+          }
+          if (d.entnahme > 0) {
+            lines += '<br>\u2212 ' + t('timelineEntnahme') + ': ' + formatCurrency(d.entnahme);
+          }
+          if (d.szHits && d.szHits.length > 0) {
+            for (var si = 0; si < d.szHits.length; si++) {
+              lines += '<br>+ ' + d.szHits[si].label + ': ' + formatCurrency(d.szHits[si].betrag);
+            }
+          }
+          tipEl.innerHTML = lines;
+          var svgRect = svgEl.getBoundingClientRect();
+          var posX = e.clientX - svgRect.left;
+          var posY = e.clientY - svgRect.top;
+          tipEl.style.display = 'block';
+          var tipW = tipEl.offsetWidth;
+          if (posX + tipW + 10 > svgRect.width) {
+            tipEl.style.left = (posX - tipW - 10) + 'px';
+          } else {
+            tipEl.style.left = (posX + 10) + 'px';
+          }
+          tipEl.style.top = (posY - 10) + 'px';
+        }
+        svgEl.querySelectorAll('.bd-hitarea').forEach(function(rect) {
+          rect.addEventListener('mouseover', function(e) { showBdTooltip(e, rect); });
+          rect.addEventListener('mousemove', function(e) { showBdTooltip(e, rect); });
+          rect.addEventListener('click', function(e) { showBdTooltip(e, rect); });
+        });
+        svgEl.addEventListener('mouseleave', function() {
+          tipEl.style.display = 'none';
+        });
+        document.addEventListener('click', function(e) {
+          if (!svgEl.contains(e.target)) {
+            tipEl.style.display = 'none';
+          }
+        });
+      }
+    }
   }
 
   function updateLangButtons() {
