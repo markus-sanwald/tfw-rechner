@@ -131,6 +131,9 @@
       if (selectedDate) {
         viewYear = selectedDate.getFullYear();
         viewMonth = selectedDate.getMonth();
+      } else if (hintDate) {
+        viewYear = hintDate.getFullYear();
+        viewMonth = hintDate.getMonth();
       }
       showMonthSelect = false;
       renderCalendar();
@@ -203,10 +206,23 @@
       }
     });
 
+    var hintDate = null;
+
     return {
       element: wrapper,
       getDate: function() { return selectedDate; },
       rebuild: function() { buildHTML(); renderCalendar(); },
+      setHintDate: function(d) { hintDate = d; },
+      setDate: function(date) {
+        selectedDate = date;
+        if (date) {
+          viewYear = date.getFullYear();
+          viewMonth = date.getMonth();
+        }
+        var els = getElements();
+        els.input.value = date ? formatDate(date) : '';
+        renderCalendar();
+      },
     };
   }
 
@@ -328,6 +344,7 @@
 
     vonPicker = createDatepicker('von', 'labelVon', function(date) {
       vonDate = date;
+      if (bisPicker) bisPicker.setHintDate(date);
       updateResult();
     });
 
@@ -636,6 +653,9 @@
       html += '</div>';
     }
 
+    // Disclaimer
+    html += '<p class="disclaimer">' + t('disclaimer') + '</p>';
+
     resultDiv.classList.remove('hidden');
     resultDiv.innerHTML = html;
   }
@@ -665,6 +685,16 @@
     }
 
     updateLangButtons();
+
+    // Preserve values and rebuild calculator UI with new language
+    var savedVon = vonDate;
+    var savedBis = bisDate;
+    var savedBrutto = bruttoValue;
+    var savedGuthaben = guthabenValue;
+    var savedWochenstunden = wochenstundenValue;
+    var savedTfwStunden = tfwStundenValue;
+    var savedSonderzahlungen = { weihnachtsgeld: sonderzahlungen.weihnachtsgeld, urlaubsgeld: sonderzahlungen.urlaubsgeld, tzug: sonderzahlungen.tzug };
+
     calculatorEl = null;
     vonDate = null;
     bisDate = null;
@@ -674,6 +704,55 @@
     tfwStundenValue = null;
     sonderzahlungen = { weihnachtsgeld: false, urlaubsgeld: false, tzug: false };
     handleHash();
+
+    // Restore values after rebuild
+    if (savedVon && vonPicker) {
+      vonDate = savedVon;
+      vonPicker.setDate(savedVon);
+    }
+    if (savedBis && bisPicker) {
+      bisDate = savedBis;
+      bisPicker.setDate(savedBis);
+    }
+    if (savedBrutto != null) {
+      bruttoValue = savedBrutto;
+      var bruttoInput = document.querySelector('#brutto');
+      if (bruttoInput) bruttoInput.value = savedBrutto;
+    }
+    if (savedGuthaben != null) {
+      guthabenValue = savedGuthaben;
+      var guthabenInput = document.querySelector('#guthaben');
+      if (guthabenInput) guthabenInput.value = savedGuthaben;
+    }
+    if (savedTfwStunden != null) {
+      tfwStundenValue = savedTfwStunden;
+      var tfwInput = document.querySelector('#tfwstunden');
+      if (tfwInput) tfwInput.value = savedTfwStunden;
+      var wsGroup = document.querySelector('#wochenstunden-group');
+      if (wsGroup) wsGroup.style.display = '';
+    }
+    if (savedWochenstunden !== 35) {
+      wochenstundenValue = savedWochenstunden;
+      var wsInput = document.querySelector('#wochenstunden');
+      if (wsInput) wsInput.value = savedWochenstunden;
+    }
+    if (savedSonderzahlungen.urlaubsgeld) {
+      sonderzahlungen.urlaubsgeld = true;
+      var cb = document.querySelector('#sz-urlaubsgeld');
+      if (cb) cb.checked = true;
+    }
+    if (savedSonderzahlungen.weihnachtsgeld) {
+      sonderzahlungen.weihnachtsgeld = true;
+      var cb2 = document.querySelector('#sz-weihnachtsgeld');
+      if (cb2) cb2.checked = true;
+    }
+    if (savedSonderzahlungen.tzug) {
+      sonderzahlungen.tzug = true;
+      var cb3 = document.querySelector('#sz-tzug');
+      if (cb3) cb3.checked = true;
+    }
+
+    updateResult();
   }
 
   function navigate(page) {

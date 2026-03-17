@@ -772,6 +772,15 @@ header h1 {
   margin: 0.3rem 0;
 }
 
+.disclaimer {
+  margin-top: 1.25rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  text-align: center;
+  line-height: 1.5;
+}
+
 /* Chart */
 .chart {
   margin-top: 1.25rem;
