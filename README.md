@@ -1,6 +1,6 @@
 # TFW Rechner
 
-Webbasierter Rechner für das **Tarifliche Freizeit-Wertguthaben (TFW)** im Rahmen des Tarifvertrags ERA (Entgeltrahmenabkommen) der Metall- und Elektroindustrie Baden-Württemberg.
+Webbasierter Rechner für das **Freizeit-Wertguthaben (TFW)**.
 
 ## Worum geht es?
 
@@ -75,6 +75,3 @@ npm test           # Unit-Tests ausführen
 npm run build      # Produktions-Build
 ```
 
-## Tariflicher Hintergrund
-
-Der Rechner basiert auf dem ERA-Tarifvertrag der Metall- und Elektroindustrie Baden-Württemberg. Die konkreten Prozentwerte für Sonderzahlungen sowie das ERA-Eckentgelt (3.592 €) sind auf die tariflichen Regelungen in BW ausgerichtet und können in anderen Tarifgebieten abweichen.
