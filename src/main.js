@@ -325,6 +325,7 @@
   var guthabenValue = null;
   var wochenstundenValue = 35;
   var tfwStundenValue = null;
+  var tfwStartMonatValue = null; // {year, month} oder null = aktueller Monat
   var sonderzahlungen = { weihnachtsgeld: false, urlaubsgeld: false, tzug: false };
   var ECKENTGELT_BW = 3592;
   var vonPicker = null;
@@ -338,6 +339,49 @@
     }) + ' \u20AC';
   }
 
+  function formatNumberDisplay(val) {
+    if (val == null || val === '') return '';
+    var num = parseFloat(String(val).replace(/\./g, '').replace(',', '.'));
+    if (isNaN(num)) return String(val);
+    var parts = num.toFixed(num % 1 === 0 ? 0 : 2).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return parts.join(',');
+  }
+
+  function parseCurrencyInput(str) {
+    if (!str) return null;
+    var cleaned = str.replace(/\./g, '').replace(',', '.');
+    var val = parseFloat(cleaned);
+    return isNaN(val) ? null : val;
+  }
+
+  function setupCurrencyInput(input, onChange, allowZero) {
+    var editing = false;
+    input.addEventListener('focus', function() {
+      editing = true;
+      // Punkte entfernen beim Editieren, Komma beibehalten
+      var val = parseCurrencyInput(input.value);
+      if (val != null) {
+        input.value = val % 1 === 0 ? String(val) : val.toFixed(2).replace('.', ',');
+      }
+    });
+    input.addEventListener('blur', function() {
+      editing = false;
+      var val = parseCurrencyInput(input.value);
+      if (val != null && (allowZero ? val >= 0 : val > 0)) {
+        input.value = formatNumberDisplay(val);
+      }
+    });
+    input.addEventListener('input', function() {
+      var val = parseCurrencyInput(input.value);
+      if (allowZero) {
+        onChange(val != null && val >= 0 ? val : null);
+      } else {
+        onChange(val != null && val > 0 ? val : null);
+      }
+    });
+  }
+
   function buildCalculator() {
     var calculator = document.createElement('div');
     calculator.className = 'calculator';
@@ -345,6 +389,7 @@
     vonPicker = createDatepicker('von', 'labelVon', function(date) {
       vonDate = date;
       if (bisPicker) bisPicker.setHintDate(date);
+      if (tfwStundenValue && tfwStartMonatGroup) updateTfwStartMonatOptions();
       updateResult();
     });
 
@@ -362,15 +407,14 @@
     bruttoGroup.innerHTML =
       '<label for="brutto" class="label-with-tooltip">' +
       t('labelBrutto') +
-      ' <span class="label-info" title="' + t('bruttoTooltip') + '">&#9432;</span>' +
+      ' <span class="label-info" data-tooltip="' + t('bruttoTooltip') + '">&#9432;</span>' +
       '</label>' +
       '<div class="input-euro-group">' +
-      '<input type="number" id="brutto" min="0" step="1" placeholder="' + t('bruttoPlaceholder') + '" value="">' +
+      '<input type="text" inputmode="decimal" id="brutto" placeholder="' + t('bruttoPlaceholder') + '" value="">' +
       '<span class="input-euro-suffix">\u20AC</span>' +
       '</div>';
-    bruttoGroup.querySelector('#brutto').addEventListener('input', function(e) {
-      var val = parseFloat(e.target.value);
-      bruttoValue = isNaN(val) || val <= 0 ? null : val;
+    setupCurrencyInput(bruttoGroup.querySelector('#brutto'), function(val) {
+      bruttoValue = val;
       updateResult();
     });
     calculator.appendChild(bruttoGroup);
@@ -381,14 +425,13 @@
     guthabenGroup.innerHTML =
       '<label for="guthaben">' + t('labelGuthaben') + '</label>' +
       '<div class="input-euro-group">' +
-      '<input type="number" id="guthaben" min="0" step="0.01" placeholder="' + t('guthabenPlaceholder') + '" value="">' +
+      '<input type="text" inputmode="decimal" id="guthaben" placeholder="' + t('guthabenPlaceholder') + '" value="">' +
       '<span class="input-euro-suffix">\u20AC</span>' +
       '</div>';
-    guthabenGroup.querySelector('#guthaben').addEventListener('input', function(e) {
-      var val = parseFloat(e.target.value);
-      guthabenValue = isNaN(val) || val < 0 ? null : val;
+    setupCurrencyInput(guthabenGroup.querySelector('#guthaben'), function(val) {
+      guthabenValue = val;
       updateResult();
-    });
+    }, true);
     calculator.appendChild(guthabenGroup);
 
     var tfwStundenGroup = document.createElement('div');
@@ -396,7 +439,7 @@
     tfwStundenGroup.id = 'tfwstunden-group';
     tfwStundenGroup.innerHTML =
       '<label for="tfwstunden" class="label-with-tooltip">' + t('labelTfwStunden') +
-      ' <span class="label-info" title="' + t('tfwStundenTooltip') + '">&#9432;</span>' +
+      ' <span class="label-info" data-tooltip="' + t('tfwStundenTooltip') + '">&#9432;</span>' +
       '</label>' +
       '<div class="input-euro-group">' +
       '<input type="number" id="tfwstunden" min="0" step="1" placeholder="' + t('tfwStundenPlaceholder') + '" value="">' +
@@ -405,8 +448,10 @@
     tfwStundenGroup.querySelector('#tfwstunden').addEventListener('input', function(e) {
       var val = parseFloat(e.target.value);
       tfwStundenValue = isNaN(val) || val <= 0 ? null : val;
-      // Wochenarbeitszeit ein-/ausblenden
+      // Wochenarbeitszeit und Startmonat ein-/ausblenden
       wochenstundenGroup.style.display = tfwStundenValue ? '' : 'none';
+      tfwStartMonatGroup.style.display = tfwStundenValue ? '' : 'none';
+      if (tfwStundenValue) updateTfwStartMonatOptions();
       updateResult();
     });
     calculator.appendChild(tfwStundenGroup);
@@ -428,15 +473,62 @@
     });
     calculator.appendChild(wochenstundenGroup);
 
+    var tfwStartMonatGroup = document.createElement('div');
+    tfwStartMonatGroup.className = 'form-group';
+    tfwStartMonatGroup.id = 'tfw-startmonat-group';
+    tfwStartMonatGroup.style.display = 'none';
+    tfwStartMonatGroup.innerHTML =
+      '<label for="tfw-startmonat">' + t('labelTfwStartMonat') + '</label>' +
+      '<select id="tfw-startmonat"></select>';
+    function updateTfwStartMonatOptions() {
+      var sel = tfwStartMonatGroup.querySelector('#tfw-startmonat');
+      var prev = tfwStartMonatValue;
+      sel.innerHTML = '<option value="">' + t('tfwStartMonatPlaceholder') + '</option>';
+      var MONTHS = getMonths();
+      var now = new Date();
+      var startY = now.getFullYear();
+      var startM = now.getMonth();
+      var endY = vonDate ? vonDate.getFullYear() : startY + 3;
+      var endM = vonDate ? vonDate.getMonth() : 11;
+      var cur = new Date(startY, startM, 1);
+      var end = new Date(endY, endM, 1);
+      while (cur < end) {
+        var val = cur.getFullYear() + '-' + cur.getMonth();
+        var label = MONTHS[cur.getMonth()] + ' ' + cur.getFullYear();
+        sel.innerHTML += '<option value="' + val + '">' + label + '</option>';
+        cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      }
+      // Restore selection if still valid
+      if (prev) {
+        var prevVal = prev.year + '-' + prev.month;
+        if (sel.querySelector('option[value="' + prevVal + '"]')) {
+          sel.value = prevVal;
+        } else {
+          tfwStartMonatValue = null;
+          sel.value = '';
+        }
+      }
+    }
+    tfwStartMonatGroup.querySelector('#tfw-startmonat').addEventListener('change', function(e) {
+      if (e.target.value) {
+        var parts = e.target.value.split('-');
+        tfwStartMonatValue = { year: parseInt(parts[0]), month: parseInt(parts[1]) };
+      } else {
+        tfwStartMonatValue = null;
+      }
+      updateResult();
+    });
+    calculator.appendChild(tfwStartMonatGroup);
+
     var sonderzahlungenGroup = document.createElement('div');
     sonderzahlungenGroup.className = 'form-group';
     sonderzahlungenGroup.id = 'sonderzahlungen-group';
     sonderzahlungenGroup.innerHTML =
       '<label>' + t('labelSonderzahlungen') + '</label>' +
       '<div class="checkbox-group">' +
-      '<label class="checkbox-label"><input type="checkbox" id="sz-urlaubsgeld"> ' + t('sonderzahlungUrlaubsgeld') + ' <span class="label-info" title="' + t('szTooltipUrlaubsgeld') + '">&#9432;</span></label>' +
-      '<label class="checkbox-label"><input type="checkbox" id="sz-weihnachtsgeld"> ' + t('sonderzahlungWeihnachtsgeld') + ' <span class="label-info" title="' + t('szTooltipWeihnachtsgeld') + '">&#9432;</span></label>' +
-      '<label class="checkbox-label"><input type="checkbox" id="sz-tzug"> ' + t('sonderzahlungTzug') + ' <span class="label-info" title="' + t('szTooltipTzug') + '">&#9432;</span></label>' +
+      '<label class="checkbox-label"><input type="checkbox" id="sz-urlaubsgeld"> ' + t('sonderzahlungUrlaubsgeld') + ' <span class="label-info" data-tooltip="' + t('szTooltipUrlaubsgeld') + '">&#9432;</span></label>' +
+      '<label class="checkbox-label"><input type="checkbox" id="sz-weihnachtsgeld"> ' + t('sonderzahlungWeihnachtsgeld') + ' <span class="label-info" data-tooltip="' + t('szTooltipWeihnachtsgeld') + '">&#9432;</span></label>' +
+      '<label class="checkbox-label"><input type="checkbox" id="sz-tzug"> ' + t('sonderzahlungTzug') + ' <span class="label-info" data-tooltip="' + t('szTooltipTzug') + '">&#9432;</span></label>' +
       '</div>';
     sonderzahlungenGroup.querySelector('#sz-urlaubsgeld').addEventListener('change', function(e) {
       sonderzahlungen.urlaubsgeld = e.target.checked;
@@ -561,14 +653,16 @@
     // TFW-Ansparen berechnen
     var tfwAnsparenValue = 0;
     var tfwAnsparenMonate = 0;
+    var ansparStartJ = tfwStartMonatValue ? tfwStartMonatValue.year : jetztJahr;
+    var ansparStartM = tfwStartMonatValue ? tfwStartMonatValue.month : jetztMonat;
     if (bruttoValue && tfwStundenValue) {
       var monatsStunden = wochenstundenValue * 52 / 12;
       var stundensatz = bruttoValue / monatsStunden;
-      var aktuellerMonat = new Date(jetztJahr, jetztMonat, 1);
+      var ansparVonMonat = new Date(ansparStartJ, ansparStartM, 1);
       var tfwStartMonat = new Date(tfwStartJ, tfwStartM, 1);
-      if (tfwStartMonat > aktuellerMonat) {
-        tfwAnsparenMonate = (tfwStartJ - jetztJahr) * 12
-          + (tfwStartM - jetztMonat);
+      if (tfwStartMonat > ansparVonMonat) {
+        tfwAnsparenMonate = (tfwStartJ - ansparStartJ) * 12
+          + (tfwStartM - ansparStartM);
         tfwAnsparenValue = tfwStundenValue * stundensatz * tfwAnsparenMonate;
       }
     }
@@ -634,7 +728,7 @@
     if (bruttoValue) {
       var MONTHS = getMonths();
       var timelineMonths = [];
-      var tmStart = new Date(jetztJahr, jetztMonat, 1);
+      var tmStart = new Date(ansparStartJ, ansparStartM, 1);
       var tmEnd = new Date(bisDate.getFullYear(), bisDate.getMonth(), 1);
       var tmCur = new Date(tmStart);
       while (tmCur <= tmEnd) {
@@ -679,7 +773,7 @@
             monatAnsparen = monthlyAnsparen;
             balance += monthlyAnsparen;
             for (var si = 0; si < szEvents.length; si++) {
-              if (tm.month === szEvents[si].month && !(tm.year === jetztJahr && tm.month <= jetztMonat)) {
+              if (tm.month === szEvents[si].month && !(tm.year === ansparStartJ && tm.month <= ansparStartM)) {
                 balance += szEvents[si].betrag;
                 szHits.push(szEvents[si]);
               }
@@ -825,9 +919,6 @@
 
         // Startpunkt (Guthaben)
         svg += '<circle cx="' + padL + '" cy="' + yPos(startBal) + '" r="4" fill="#22c55e" stroke="#fff" stroke-width="1.5"/>';
-        if (startBal > 0) {
-          svg += '<text x="' + Math.max(padL, padL + 2) + '" y="' + (yPos(startBal) - 10) + '" text-anchor="start" class="sz-marker-label" fill="#22c55e">' + t('timelineGuthaben') + '</text>';
-        }
 
         // Datenpunkte
         for (var dp = 0; dp < points.length; dp++) {
@@ -848,7 +939,7 @@
         if (fristMonthIdx >= 0) {
           var fristX = xPos(fristMonthIdx);
           svg += '<line x1="' + fristX + '" y1="' + padT + '" x2="' + fristX + '" y2="' + (svgH - padB) + '" stroke="#d97706" stroke-width="1.5" stroke-dasharray="5,3"/>';
-          svg += '<text x="' + (fristX + 4) + '" y="' + (padT + 12) + '" class="sz-marker-label" fill="#d97706">' + t('timelineAntragsfrist') + '</text>';
+          svg += '<text x="' + (fristX + 4) + '" y="' + (svgH - padB - 5) + '" class="sz-marker-label" fill="#d97706">' + t('timelineAntragsfrist') + '</text>';
         }
 
         // Y-Achse Werte
@@ -1043,6 +1134,7 @@
     var savedGuthaben = guthabenValue;
     var savedWochenstunden = wochenstundenValue;
     var savedTfwStunden = tfwStundenValue;
+    var savedTfwStartMonat = tfwStartMonatValue;
     var savedSonderzahlungen = { weihnachtsgeld: sonderzahlungen.weihnachtsgeld, urlaubsgeld: sonderzahlungen.urlaubsgeld, tzug: sonderzahlungen.tzug };
 
     calculatorEl = null;
@@ -1052,6 +1144,7 @@
     guthabenValue = null;
     wochenstundenValue = 35;
     tfwStundenValue = null;
+    tfwStartMonatValue = null;
     sonderzahlungen = { weihnachtsgeld: false, urlaubsgeld: false, tzug: false };
     handleHash();
 
@@ -1067,12 +1160,12 @@
     if (savedBrutto != null) {
       bruttoValue = savedBrutto;
       var bruttoInput = document.querySelector('#brutto');
-      if (bruttoInput) bruttoInput.value = savedBrutto;
+      if (bruttoInput) bruttoInput.value = formatNumberDisplay(savedBrutto);
     }
     if (savedGuthaben != null) {
       guthabenValue = savedGuthaben;
       var guthabenInput = document.querySelector('#guthaben');
-      if (guthabenInput) guthabenInput.value = savedGuthaben;
+      if (guthabenInput) guthabenInput.value = formatNumberDisplay(savedGuthaben);
     }
     if (savedTfwStunden != null) {
       tfwStundenValue = savedTfwStunden;
@@ -1080,6 +1173,17 @@
       if (tfwInput) tfwInput.value = savedTfwStunden;
       var wsGroup = document.querySelector('#wochenstunden-group');
       if (wsGroup) wsGroup.style.display = '';
+      var smGroup = document.querySelector('#tfw-startmonat-group');
+      if (smGroup) {
+        smGroup.style.display = '';
+        // rebuild options, then restore
+        if (typeof updateTfwStartMonatOptions === 'function') updateTfwStartMonatOptions();
+      }
+    }
+    if (savedTfwStartMonat != null) {
+      tfwStartMonatValue = savedTfwStartMonat;
+      var smSel = document.querySelector('#tfw-startmonat');
+      if (smSel) smSel.value = savedTfwStartMonat.year + '-' + savedTfwStartMonat.month;
     }
     if (savedWochenstunden !== 35) {
       wochenstundenValue = savedWochenstunden;
