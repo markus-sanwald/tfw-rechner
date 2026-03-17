@@ -711,9 +711,24 @@
           }
         }
 
+        // Beantragungsfrist berechnen
+        var gesamtMonateDauerBD = anzahlMonate + (restTageVor > 0 ? 1 : 0) + (restTageNach > 0 ? 1 : 0);
+        var fristMonateBD;
+        if (gesamtTage <= 31) { fristMonateBD = 1; }
+        else if (gesamtMonateDauerBD <= 6) { fristMonateBD = 3; }
+        else { fristMonateBD = 6; }
+        var fristDatumBD = new Date(vonDate.getFullYear(), vonDate.getMonth() - fristMonateBD + 1, 0);
+        var fristMonthIdx = -1;
+        for (var fi = 0; fi < timelineMonths.length; fi++) {
+          var ftm = timelineMonths[fi];
+          if (ftm.year === fristDatumBD.getFullYear() && ftm.month === fristDatumBD.getMonth()) {
+            fristMonthIdx = fi; break;
+          }
+        }
+
         // SVG Dimensionen
         var svgW = 600, svgH = 240;
-        var padL = 50, padR = 15, padT = 45, padB = 35;
+        var padL = 55, padR = 10, padT = 45, padB = 35;
         var chartW = svgW - padL - padR;
         var chartH = svgH - padT - padB;
 
@@ -729,7 +744,12 @@
         var range = maxBal - minBal;
         if (range === 0) range = 1000;
         maxBal += range * 0.1;
-        minBal -= range * 0.1;
+        // Y-Achse bei 0 starten wenn Saldo nie negativ wird
+        if (minBal >= 0) {
+          minBal = 0;
+        } else {
+          minBal -= range * 0.1;
+        }
 
         function yPos(val) { return padT + chartH - ((val - minBal) / (maxBal - minBal)) * chartH; }
         function xPos(idx) { return padL + (idx / (points.length - 1)) * chartW; }
@@ -824,6 +844,13 @@
           svg += '<text x="' + mx + '" y="' + (my - 10) + '" text-anchor="middle" class="sz-marker-label" fill="' + m.sz.color + '">' + m.sz.label + '</text>';
         }
 
+        // Antragsfrist-Linie
+        if (fristMonthIdx >= 0) {
+          var fristX = xPos(fristMonthIdx);
+          svg += '<line x1="' + fristX + '" y1="' + padT + '" x2="' + fristX + '" y2="' + (svgH - padB) + '" stroke="#d97706" stroke-width="1.5" stroke-dasharray="5,3"/>';
+          svg += '<text x="' + (fristX + 4) + '" y="' + (padT + 12) + '" class="sz-marker-label" fill="#d97706">' + t('timelineAntragsfrist') + '</text>';
+        }
+
         // Y-Achse Werte
         var yLabels = [maxBal, (maxBal + minBal) / 2, minBal];
         for (var yl = 0; yl < yLabels.length; yl++) {
@@ -853,8 +880,8 @@
         svg += '</svg>';
 
         // Tooltip-Container
-        html += '<div class="timeline-chart" style="position:relative;">';
-        html += '<div class="breakdown-title">' + t('timelineTitle') + '</div>';
+        html += '<div class="timeline-chart" id="timeline-chart-container">';
+        html += '<div class="breakdown-title" style="display:flex;justify-content:space-between;align-items:center;">' + t('timelineTitle') + '<button type="button" class="bd-expand-btn" id="bd-expand-btn" title="Vergrößern">&#x26F6;</button></div>';
         html += svg;
         html += '<div class="bd-tooltip" id="' + chartId + '-tip" style="display:none;"></div>';
 
@@ -870,6 +897,9 @@
           html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:' + szEvents[sn].color + ';border-radius:50%;"></span>' + szEvents[sn].label + '</div>';
         }
         html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:var(--color-accent);"></span>' + t('timelineEntnahme') + '</div>';
+        if (fristMonthIdx >= 0) {
+          html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:#d97706;border-radius:0;height:2px;width:14px;border-top:1.5px dashed #d97706;background:transparent;"></span>' + t('timelineAntragsfrist') + '</div>';
+        }
         html += '</div>';
         html += '</div>';
 
@@ -897,7 +927,7 @@
         fristText = t('fristLang');
       }
       var fristDatum = new Date(vonDate.getFullYear(), vonDate.getMonth() - fristMonate + 1, 0);
-      html += '<div class="info-box">';
+      html += '<div class="info-box" style="margin-top:2rem;">';
       html += '<div class="info-box-title">' + t('fristTitle') + '</div>';
       html += '<p>' + fristText + '</p>';
       html += '<p style="font-weight:600;">' + t('fristDeadline') + ' ' + formatDate(fristDatum) + '</p>';
@@ -959,6 +989,24 @@
           }
         });
       }
+    }
+
+    // Expand-Button für Burndown-Chart
+    var expandBtn = document.getElementById('bd-expand-btn');
+    var chartContainer = document.getElementById('timeline-chart-container');
+    if (expandBtn && chartContainer) {
+      expandBtn.addEventListener('click', function() {
+        var isExpanded = chartContainer.classList.toggle('bd-expanded');
+        expandBtn.innerHTML = isExpanded ? '&#x2716;' : '&#x26F6;';
+        document.body.style.overflow = isExpanded ? 'hidden' : '';
+      });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && chartContainer.classList.contains('bd-expanded')) {
+          chartContainer.classList.remove('bd-expanded');
+          expandBtn.innerHTML = '&#x26F6;';
+          document.body.style.overflow = '';
+        }
+      });
     }
   }
 
