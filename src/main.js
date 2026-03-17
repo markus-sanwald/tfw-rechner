@@ -235,7 +235,7 @@
       '<p>Angaben gem&auml;&szlig; &sect; 5 DDG</p>' +
       '<p>Markus Sanwald<br><br>Am F&ouml;llbach 39<br>72649 Wolfschlugen</p>' +
       '<p><strong>Vertreten durch:</strong><br>Markus Sanwald</p>' +
-      '<p><strong>Kontakt:</strong><br>Telefon: +49-70229791487<br>E-Mail: <a href="mailto:info@era-rechner.de">info@era-rechner.de</a></p>' +
+      '<p><strong>Kontakt:</strong><br>Telefon: +49-70229791487<br>E-Mail: <a href="mailto:info@tfw-rechner.de">info@tfw-rechner.de</a></p>' +
       '<p><strong>Verbraucherstreitbeilegung / Universalschlichtungsstelle</strong><br>Wir nehmen nicht an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teil und sind dazu auch nicht verpflichtet.</p>' +
       '<p><strong>Haftungsausschluss:</strong></p>' +
       '<p><strong>Haftung f&uuml;r Inhalte</strong><br>Die Inhalte unserer Seiten wurden mit gr&ouml;&szlig;ter Sorgfalt erstellt. F&uuml;r die Richtigkeit, Vollst&auml;ndigkeit und Aktualit&auml;t der Inhalte k&ouml;nnen wir jedoch keine Gew&auml;hr &uuml;bernehmen. Als Diensteanbieter sind wir gem&auml;&szlig; &sect; 7 Abs.1 DDG f&uuml;r eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach &sect;&sect; 8 bis 10 DDG sind wir als Diensteanbieter jedoch nicht verpflichtet, &uuml;bermittelte oder gespeicherte fremde Informationen zu &uuml;berwachen oder nach Umst&auml;nden zu forschen, die auf eine rechtswidrige T&auml;tigkeit hinweisen. Verpflichtungen zur Entfernung oder Sperrung der Nutzung von Informationen nach den allgemeinen Gesetzen bleiben hiervon unber&uuml;hrt. Eine diesbez&uuml;gliche Haftung ist jedoch erst ab dem Zeitpunkt der Kenntnis einer konkreten Rechtsverletzung m&ouml;glich. Bei Bekanntwerden von entsprechenden Rechtsverletzungen werden wir diese Inhalte umgehend entfernen.</p>' +
@@ -278,10 +278,6 @@
       '<p>Wir beabsichtigen personenbezogenen Daten an Drittl&auml;nder au&szlig;erhalb des Europ&auml;ischen Wirtschaftsraums, insbesondere die USA, zu &uuml;bermitteln. Die Daten&uuml;bermittlung in die USA erfolgt nach Art. 45 Abs. 1 DSGVO auf Grundlage des Angemessenheitsbeschluss der Europ&auml;ischen Kommission. Die beteiligten US-Unternehmen und/oder deren US-Unterauftragnehmer sind nach dem EU-U.S. Data Privacy Framework (EU-U.S. DPF) zertifiziert.</p>' +
       '<h3>Speicherdauer</h3>' +
       '<p>Die konkrete Speicherdauer der verarbeiteten Daten ist nicht durch uns beeinflussbar, sondern wird von Cloudflare, Inc. bestimmt. Weitere Hinweise finden Sie in der Datenschutzerkl&auml;rung f&uuml;r Cloudflare CDN: <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">https://www.cloudflare.com/privacypolicy/</a>.</p>' +
-      '<h2>PayPal</h2>' +
-      '<p>Unsere Website erm&ouml;glicht die Bezahlung via PayPal. Anbieter des Bezahldienstes ist die PayPal (Europe) S.&agrave;.r.l. et Cie, S.C.A., 22-24 Boulevard Royal, L-2449 Luxembourg.</p>' +
-      '<p>Wenn Sie mit PayPal bezahlen, erfolgt eine &Uuml;bermittlung der von Ihnen eingegebenen Zahlungsdaten an PayPal.</p>' +
-      '<p>Die &Uuml;bermittlung Ihrer Daten an PayPal erfolgt auf Grundlage von Art. 6 Abs. 1 lit. a DSGVO (Einwilligung) und Art. 6 Abs. 1 lit. b DSGVO (Verarbeitung zur Erf&uuml;llung eines Vertrags). Ein Widerruf Ihrer bereits erteilten Einwilligung ist jederzeit m&ouml;glich. In der Vergangenheit liegende Datenverarbeitungsvorg&auml;nge bleiben bei einem Widerruf wirksam.</p>' +
       '<p class="imprint-credit"><small>Quelle: Datenschutz-Konfigurator von <a href="https://www.hub24.de" target="_blank" rel="noopener">Herold Unternehmensberatung</a></small></p>' +
       '</section>';
   }
@@ -291,7 +287,7 @@
       '<section class="page-content">' +
       '<h1>' + t('kontaktTitle') + '</h1>' +
       '<p class="contact-intro">' + t('kontaktIntro') + '</p>' +
-      '<form id="contact-form" class="contact-form" action="https://formsubmit.co/info@era-rechner.de" method="POST">' +
+      '<form id="contact-form" class="contact-form" action="https://formsubmit.co/info@tfw-rechner.de" method="POST">' +
       '<input type="hidden" name="_subject" value="TFW-Rechner: Kontaktformular">' +
       '<input type="hidden" name="_captcha" value="true">' +
       '<input type="hidden" name="_next" value="' + window.location.origin + window.location.pathname + '#kontakt-success">' +
@@ -331,6 +327,8 @@
   var vonPicker = null;
   var bisPicker = null;
   var resultDiv = null;
+  var bdDocClickHandler = null;
+  var bdDocKeyHandler = null;
 
   function formatCurrency(value) {
     return value.toLocaleString(getLang() === 'en' ? 'en-US' : 'de-DE', {
@@ -1074,11 +1072,13 @@
         svgEl.addEventListener('mouseleave', function() {
           tipEl.style.display = 'none';
         });
-        document.addEventListener('click', function(e) {
+        if (bdDocClickHandler) document.removeEventListener('click', bdDocClickHandler);
+        bdDocClickHandler = function(e) {
           if (!svgEl.contains(e.target)) {
             tipEl.style.display = 'none';
           }
-        });
+        };
+        document.addEventListener('click', bdDocClickHandler);
       }
     }
 
@@ -1091,13 +1091,15 @@
         expandBtn.innerHTML = isExpanded ? '&#x2716;' : '&#x26F6;';
         document.body.style.overflow = isExpanded ? 'hidden' : '';
       });
-      document.addEventListener('keydown', function(e) {
+      if (bdDocKeyHandler) document.removeEventListener('keydown', bdDocKeyHandler);
+      bdDocKeyHandler = function(e) {
         if (e.key === 'Escape' && chartContainer.classList.contains('bd-expanded')) {
           chartContainer.classList.remove('bd-expanded');
           expandBtn.innerHTML = '&#x26F6;';
           document.body.style.overflow = '';
         }
-      });
+      };
+      document.addEventListener('keydown', bdDocKeyHandler);
     }
   }
 
@@ -1111,13 +1113,18 @@
     titleEl.textContent = t('title');
     subtitleEl.textContent = t('subtitle');
 
-    var footerLinks = document.querySelector('.footer-links');
-    if (footerLinks) {
-      footerLinks.innerHTML =
+    var footer = document.querySelector('footer');
+    if (footer) {
+      footer.innerHTML =
+        '<p class="footer-feedback">' + t('footerFeedback') + ' <a href="mailto:info@tfw-rechner.de">info@tfw-rechner.de</a></p>' +
+        '<p class="footer-links">' +
         '<a href="#impressum" data-nav="impressum">' + t('footerImpressum') + '</a>' +
         '<span class="footer-sep">&middot;</span>' +
-        '<a href="#datenschutz" data-nav="datenschutz">' + t('footerDatenschutz') + '</a>';
-      footerLinks.querySelectorAll('[data-nav]').forEach(function(link) {
+        '<a href="#datenschutz" data-nav="datenschutz">' + t('footerDatenschutz') + '</a>' +
+        '<span class="footer-sep">&middot;</span>' +
+        '<a href="https://github.com/markus-sanwald/tfw-rechner" target="_blank" rel="noopener">' + t('footerGithub') + '</a>' +
+        '</p>';
+      footer.querySelectorAll('[data-nav]').forEach(function(link) {
         link.addEventListener('click', function(e) {
           e.preventDefault();
           window.location.hash = link.dataset.nav;

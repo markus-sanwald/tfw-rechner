@@ -111,8 +111,11 @@ var TFW = window.TFW || {};
   function parseDate(str) {
     var parts = str.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
     if (!parts) return null;
-    var date = new Date(parseInt(parts[3]), parseInt(parts[2]) - 1, parseInt(parts[1]));
-    if (isNaN(date)) return null;
+    var day = parseInt(parts[1]);
+    var month = parseInt(parts[2]) - 1;
+    var year = parseInt(parts[3]);
+    var date = new Date(year, month, day);
+    if (isNaN(date) || date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) return null;
     return date;
   }
 
