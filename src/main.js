@@ -330,6 +330,8 @@
   var sonderzahlungen = { weihnachtsgeld: false, urlaubsgeld: false, tzug: false };
   var verzinsungEnabled = false;
   var verzinsungRate = 3.1;
+  var gehaltserhoehungenEnabled = false;
+  var gehaltserhoehungen = []; // [{year, month, brutto}] aufsteigend sortiert nach Datum
   var vonPicker = null;
   var bisPicker = null;
   var resultDiv = null;
@@ -357,6 +359,136 @@
     var cleaned = str.replace(/\./g, '').replace(',', '.');
     var val = parseFloat(cleaned);
     return isNaN(val) ? null : val;
+  }
+
+  function getSalaryAt(year, month) {
+    if (!gehaltserhoehungenEnabled || gehaltserhoehungen.length === 0 || !bruttoValue) return bruttoValue;
+    var salary = bruttoValue;
+    for (var i = 0; i < gehaltserhoehungen.length; i++) {
+      var g = gehaltserhoehungen[i];
+      if (g.year < year || (g.year === year && g.month <= month)) {
+        salary = g.brutto;
+      }
+    }
+    return salary;
+  }
+
+  function parseMonthYear(str) {
+    var m = String(str).match(/^(\d{1,2})\.(\d{4})$/);
+    if (!m) return null;
+    var month = parseInt(m[1]) - 1;
+    var year = parseInt(m[2]);
+    if (month < 0 || month > 11 || year < 2000 || year > 2100) return null;
+    return { year: year, month: month };
+  }
+
+  function buildMonthYearOptions(selectedYear, selectedMonth, minYear, minMonth, maxYear, maxMonth) {
+    var MONTHS = getMonths();
+    var now = new Date();
+    var startY = (minYear !== undefined) ? minYear : now.getFullYear() - 1;
+    var startM = (minMonth !== undefined) ? minMonth : 0;
+    var endY = (maxYear !== undefined) ? maxYear : now.getFullYear() + 8;
+    var endM = (maxMonth !== undefined) ? maxMonth : 11;
+    var html = '';
+    for (var y = startY; y <= endY; y++) {
+      var mStart = (y === startY) ? startM : 0;
+      var mEnd = (y === endY) ? endM : 11;
+      for (var m = mStart; m <= mEnd; m++) {
+        var val = y + '-' + m;
+        var sel = (y === selectedYear && m === selectedMonth) ? ' selected' : '';
+        html += '<option value="' + val + '"' + sel + '>' + MONTHS[m] + ' ' + y + '</option>';
+      }
+    }
+    return html;
+  }
+
+  function renderGehaltserhoehungenList(container) {
+    gehaltserhoehungen.sort(function(a, b) { return a.year !== b.year ? a.year - b.year : a.month - b.month; });
+    container.innerHTML = '';
+    for (var i = 0; i < gehaltserhoehungen.length; i++) {
+      (function(idx) {
+        var g = gehaltserhoehungen[idx];
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:flex-end;gap:12px;margin-bottom:12px;';
+
+        // Datum-Dropdown
+        var dateGroup = document.createElement('div');
+        dateGroup.style.cssText = 'display:flex;flex-direction:column;gap:4px;flex-shrink:0;';
+        var dateLabel = document.createElement('span');
+        dateLabel.style.cssText = 'font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);font-weight:600;';
+        dateLabel.textContent = t('geAb');
+        var dateSelect = document.createElement('select');
+        dateSelect.style.cssText = 'height:46px;padding:0 10px;border:1.5px solid var(--color-border);border-radius:var(--radius);background:#fff;color:var(--color-text);font-size:1rem;font-family:inherit;cursor:pointer;box-sizing:border-box;';
+        // Min: next month from today; Max: month before vonDate (or far future if not set)
+        var _now = new Date();
+        var _minY = _now.getFullYear(), _minM = _now.getMonth() + 1;
+        if (_minM > 11) { _minM = 0; _minY++; }
+        var _maxY, _maxM;
+        if (vonDate) {
+          _maxM = vonDate.getMonth() - 1;
+          _maxY = vonDate.getFullYear();
+          if (_maxM < 0) { _maxM = 11; _maxY--; }
+        } else {
+          _maxY = _minY + 8; _maxM = 11;
+        }
+        // Clamp selected value into valid range
+        var _selY = g.year, _selM = g.month;
+        if (_selY < _minY || (_selY === _minY && _selM < _minM)) { _selY = _minY; _selM = _minM; }
+        if (_selY > _maxY || (_selY === _maxY && _selM > _maxM)) { _selY = _maxY; _selM = _maxM; }
+        if (_selY !== g.year || _selM !== g.month) {
+          gehaltserhoehungen[idx].year = _selY;
+          gehaltserhoehungen[idx].month = _selM;
+        }
+        dateSelect.innerHTML = buildMonthYearOptions(_selY, _selM, _minY, _minM, _maxY, _maxM);
+        dateSelect.addEventListener('change', function() {
+          var parts = dateSelect.value.split('-');
+          gehaltserhoehungen[idx].year = parseInt(parts[0]);
+          gehaltserhoehungen[idx].month = parseInt(parts[1]);
+          updateResult();
+        });
+        dateGroup.appendChild(dateLabel);
+        dateGroup.appendChild(dateSelect);
+
+        // Neues Bruttogehalt
+        var bruttoGroup = document.createElement('div');
+        bruttoGroup.style.cssText = 'display:flex;flex-direction:column;gap:4px;flex:1 1 auto;min-width:0;';
+        var bruttoLabel = document.createElement('span');
+        bruttoLabel.style.cssText = 'font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);font-weight:600;';
+        bruttoLabel.textContent = t('geNeuesBrutto');
+        var bruttoWrapper = document.createElement('div');
+        bruttoWrapper.className = 'input-euro-group';
+        bruttoWrapper.style.cssText = 'width:100%;';
+        var bruttoInput = document.createElement('input');
+        bruttoInput.type = 'text';
+        bruttoInput.placeholder = '0';
+        bruttoInput.style.cssText = 'text-align:right;width:100%;';
+        bruttoInput.value = formatNumberDisplay(g.brutto);
+        setupCurrencyInput(bruttoInput, function(val) { gehaltserhoehungen[idx].brutto = val || 0; updateResult(); });
+        var euroSuffix = document.createElement('span');
+        euroSuffix.className = 'input-euro-suffix';
+        euroSuffix.textContent = '\u20AC';
+        bruttoWrapper.appendChild(bruttoInput);
+        bruttoWrapper.appendChild(euroSuffix);
+        bruttoGroup.appendChild(bruttoLabel);
+        bruttoGroup.appendChild(bruttoWrapper);
+
+        // Löschen-Button
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.textContent = '\u00D7';
+        removeBtn.style.cssText = 'background:none;border:none;color:var(--color-accent);cursor:pointer;font-size:1.4rem;line-height:1;padding:0 4px;flex-shrink:0;height:46px;';
+        removeBtn.addEventListener('click', function() {
+          gehaltserhoehungen.splice(idx, 1);
+          renderGehaltserhoehungenList(container);
+          updateResult();
+        });
+
+        row.appendChild(dateGroup);
+        row.appendChild(bruttoGroup);
+        row.appendChild(removeBtn);
+        container.appendChild(row);
+      })(i);
+    }
   }
 
   function setupCurrencyInput(input, onChange, allowZero) {
@@ -394,6 +526,8 @@
       vonDate = date;
       if (bisPicker) bisPicker.setHintDate(date);
       if (tfwStundenValue && tfwStartMonatGroup) updateTfwStartMonatOptions();
+      var geListEl = document.querySelector('#ge-list');
+      if (geListEl && gehaltserhoehungenEnabled) renderGehaltserhoehungenList(geListEl);
       updateResult();
     });
 
@@ -584,6 +718,60 @@
     });
     calculator.appendChild(verzinsungGroup);
 
+    var geGroup = document.createElement('div');
+    geGroup.className = 'form-group';
+    geGroup.id = 'gehaltserhoehungen-group';
+    var geLabel = document.createElement('label');
+    var geLabelInfo = document.createElement('span');
+    geLabelInfo.className = 'label-info';
+    geLabelInfo.setAttribute('data-tooltip', t('geTooltip'));
+    geLabelInfo.innerHTML = '&#9432;';
+    geLabel.textContent = t('labelGehaltserhoehungen') + ' ';
+    geLabel.appendChild(geLabelInfo);
+    geGroup.appendChild(geLabel);
+    var geCheckboxWrapper = document.createElement('div');
+    geCheckboxWrapper.className = 'checkbox-group';
+    var geCheckboxLabel = document.createElement('label');
+    geCheckboxLabel.className = 'checkbox-label';
+    var geCheckbox = document.createElement('input');
+    geCheckbox.type = 'checkbox';
+    geCheckbox.id = 'ge-enabled';
+    geCheckboxLabel.appendChild(geCheckbox);
+    geCheckboxLabel.appendChild(document.createTextNode(' ' + t('gehaltserhoehungenLabel')));
+    geCheckboxWrapper.appendChild(geCheckboxLabel);
+    geGroup.appendChild(geCheckboxWrapper);
+
+    var geContent = document.createElement('div');
+    geContent.id = 'ge-content';
+    geContent.style.cssText = 'margin-top:10px;display:none;';
+
+    var geList = document.createElement('div');
+    geList.id = 'ge-list';
+    geContent.appendChild(geList);
+
+    var geAddBtn = document.createElement('button');
+    geAddBtn.type = 'button';
+    geAddBtn.textContent = t('gehaltserhoehungHinzufuegen');
+    geAddBtn.style.cssText = 'margin-top:6px;font-size:0.85rem;padding:6px 14px;cursor:pointer;background:none;border:1px solid var(--color-border);border-radius:6px;color:var(--color-primary);font-weight:500;';
+    geAddBtn.addEventListener('click', function() {
+      var now = new Date();
+      var defM = now.getMonth() + 1, defY = now.getFullYear();
+      if (defM > 11) { defM = 0; defY++; }
+      gehaltserhoehungen.push({ year: defY, month: defM, brutto: bruttoValue || 0 });
+      renderGehaltserhoehungenList(geList);
+      updateResult();
+    });
+    geContent.appendChild(geAddBtn);
+    geGroup.appendChild(geContent);
+
+    geCheckbox.addEventListener('change', function(e) {
+      gehaltserhoehungenEnabled = e.target.checked;
+      geContent.style.display = e.target.checked ? '' : 'none';
+      updateResult();
+    });
+
+    calculator.appendChild(geGroup);
+
     resultDiv = document.createElement('div');
     resultDiv.className = 'result hidden';
     resultDiv.id = 'zeitraum-result';
@@ -625,12 +813,31 @@
     // Berechne Gesamtgehalt für den Zeitraum
     var totalSalary = 0;
     if (bruttoValue) {
-      totalSalary = anzahlMonate * bruttoValue;
-      if (restTageVor > 0) {
-        totalSalary += (analyse.arbeitstageVor / analyse.arbeitstageVorGesamt) * bruttoValue;
-      }
-      if (restTageNach > 0) {
-        totalSalary += (analyse.arbeitstageNach / analyse.arbeitstageNachGesamt) * bruttoValue;
+      if (gehaltserhoehungenEnabled && gehaltserhoehungen.length > 0) {
+        var freistCur = new Date(vonDate.getFullYear(), vonDate.getMonth(), 1);
+        var freistEnd = new Date(bisDate.getFullYear(), bisDate.getMonth(), 1);
+        while (freistCur <= freistEnd) {
+          var fy = freistCur.getFullYear(), fm = freistCur.getMonth();
+          var sal = getSalaryAt(fy, fm);
+          var isFreistFirst = (fy === vonDate.getFullYear() && fm === vonDate.getMonth());
+          var isFreistLast = (fy === bisDate.getFullYear() && fm === bisDate.getMonth());
+          if (isFreistFirst && restTageVor > 0) {
+            totalSalary += (analyse.arbeitstageVor / analyse.arbeitstageVorGesamt) * sal;
+          } else if (isFreistLast && restTageNach > 0) {
+            totalSalary += (analyse.arbeitstageNach / analyse.arbeitstageNachGesamt) * sal;
+          } else {
+            totalSalary += sal;
+          }
+          freistCur.setMonth(freistCur.getMonth() + 1);
+        }
+      } else {
+        totalSalary = anzahlMonate * bruttoValue;
+        if (restTageVor > 0) {
+          totalSalary += (analyse.arbeitstageVor / analyse.arbeitstageVorGesamt) * bruttoValue;
+        }
+        if (restTageNach > 0) {
+          totalSalary += (analyse.arbeitstageNach / analyse.arbeitstageNachGesamt) * bruttoValue;
+        }
       }
     }
 
@@ -652,30 +859,43 @@
       return count;
     }
 
+    function zahlungenDatenBisStart(auszahlungsMonat) {
+      var result = [];
+      for (var jahr = jetztJahr; jahr <= tfwStartJ; jahr++) {
+        if (jahr === jetztJahr && auszahlungsMonat <= jetztMonat) continue;
+        if (jahr === tfwStartJ && auszahlungsMonat >= tfwStartM) continue;
+        result.push({ year: jahr, month: auszahlungsMonat });
+      }
+      return result;
+    }
+
     var sonderzahlungenTotal = 0;
     var szDetails = [];
     var szUrlaubsgeldAnzahl = 0, szWeihnachtsgeldAnzahl = 0, szTzugAAnzahl = 0;
     var szUrlaubsgeldBetrag = 0, szWeihnachtsgeldBetrag = 0, szTzugABetrag = 0;
 
     if (bruttoValue && sonderzahlungen.urlaubsgeld) {
-      szUrlaubsgeldAnzahl = zahlungenBisStart(5);
-      szUrlaubsgeldBetrag = szUrlaubsgeldAnzahl * bruttoValue * 0.69;
+      var szUgDaten = zahlungenDatenBisStart(5);
+      szUrlaubsgeldAnzahl = szUgDaten.length;
+      szUgDaten.forEach(function(d) { szUrlaubsgeldBetrag += getSalaryAt(d.year, d.month) * 0.69; });
       if (szUrlaubsgeldBetrag > 0) {
         sonderzahlungenTotal += szUrlaubsgeldBetrag;
         szDetails.push(szUrlaubsgeldAnzahl + '\u00D7 Urlaubsgeld (' + formatCurrency(szUrlaubsgeldBetrag) + ')');
       }
     }
     if (bruttoValue && sonderzahlungen.weihnachtsgeld) {
-      szWeihnachtsgeldAnzahl = zahlungenBisStart(10);
-      szWeihnachtsgeldBetrag = szWeihnachtsgeldAnzahl * bruttoValue * 0.55;
+      var szWgDaten = zahlungenDatenBisStart(10);
+      szWeihnachtsgeldAnzahl = szWgDaten.length;
+      szWgDaten.forEach(function(d) { szWeihnachtsgeldBetrag += getSalaryAt(d.year, d.month) * 0.55; });
       if (szWeihnachtsgeldBetrag > 0) {
         sonderzahlungenTotal += szWeihnachtsgeldBetrag;
         szDetails.push(szWeihnachtsgeldAnzahl + '\u00D7 Weihnachtsgeld (' + formatCurrency(szWeihnachtsgeldBetrag) + ')');
       }
     }
     if (bruttoValue && sonderzahlungen.tzug) {
-      szTzugAAnzahl = zahlungenBisStart(6);
-      szTzugABetrag = szTzugAAnzahl * bruttoValue * 0.275;
+      var szTzDaten = zahlungenDatenBisStart(6);
+      szTzugAAnzahl = szTzDaten.length;
+      szTzDaten.forEach(function(d) { szTzugABetrag += getSalaryAt(d.year, d.month) * 0.275; });
       if (szTzugABetrag > 0) {
         sonderzahlungenTotal += szTzugABetrag;
         szDetails.push(szTzugAAnzahl + '\u00D7 T-Zug A (' + formatCurrency(szTzugABetrag) + ')');
@@ -685,17 +905,40 @@
     // TFW-Ansparen berechnen
     var tfwAnsparenValue = 0;
     var tfwAnsparenMonate = 0;
+    var tfwAnsparenSegmente = []; // [{monate, stunden, stundenlohn, brutto}]
     var ansparStartJ = tfwStartMonatValue ? tfwStartMonatValue.year : jetztJahr;
     var ansparStartM = tfwStartMonatValue ? tfwStartMonatValue.month : jetztMonat;
     if (bruttoValue && tfwStundenValue) {
       var monatsStunden = wochenstundenValue * 52 / 12;
-      var stundensatz = bruttoValue / monatsStunden;
       var ansparVonMonat = new Date(ansparStartJ, ansparStartM, 1);
       var tfwStartMonat = new Date(tfwStartJ, tfwStartM, 1);
       if (tfwStartMonat > ansparVonMonat) {
-        tfwAnsparenMonate = (tfwStartJ - ansparStartJ) * 12
-          + (tfwStartM - ansparStartM);
-        tfwAnsparenValue = tfwStundenValue * stundensatz * tfwAnsparenMonate;
+        tfwAnsparenMonate = (tfwStartJ - ansparStartJ) * 12 + (tfwStartM - ansparStartM);
+        if (gehaltserhoehungenEnabled && gehaltserhoehungen.length > 0) {
+          var segBrutto = null;
+          var segCount = 0;
+          for (var ai = 0; ai < tfwAnsparenMonate; ai++) {
+            var aAbsM = ansparStartM + ai;
+            var aCurM = aAbsM % 12;
+            var aCurJ = ansparStartJ + Math.floor(aAbsM / 12);
+            var curBrutto = getSalaryAt(aCurJ, aCurM);
+            if (segBrutto !== curBrutto) {
+              if (segCount > 0) {
+                tfwAnsparenSegmente.push({ monate: segCount, stunden: tfwStundenValue, stundenlohn: segBrutto / monatsStunden, brutto: segBrutto });
+              }
+              segBrutto = curBrutto;
+              segCount = 1;
+            } else {
+              segCount++;
+            }
+            tfwAnsparenValue += tfwStundenValue * (curBrutto / monatsStunden);
+          }
+          if (segCount > 0) {
+            tfwAnsparenSegmente.push({ monate: segCount, stunden: tfwStundenValue, stundenlohn: segBrutto / monatsStunden, brutto: segBrutto });
+          }
+        } else {
+          tfwAnsparenValue = tfwStundenValue * (bruttoValue / monatsStunden) * tfwAnsparenMonate;
+        }
       }
     }
 
@@ -704,25 +947,23 @@
     if (verzinsungEnabled && verzinsungRate > 0 && tfwAnsparenMonate > 0) {
       var monthlyRate = Math.pow(1 + verzinsungRate / 100, 1 / 12) - 1;
       var vzBalance = guthabenValue || 0;
-      var vzMonthlyAnsparen = 0;
-      if (bruttoValue && tfwStundenValue) {
-        var vzMonatsStunden = wochenstundenValue * 52 / 12;
-        vzMonthlyAnsparen = tfwStundenValue * (bruttoValue / vzMonatsStunden);
-      }
+      var vzMonatsStunden = wochenstundenValue * 52 / 12;
       for (var vi = 0; vi < tfwAnsparenMonate; vi++) {
         var vzAbsMonth = ansparStartM + vi;
         var vzCurM = vzAbsMonth % 12;
         var vzCurJ = ansparStartJ + Math.floor(vzAbsMonth / 12);
+        var vzSalary = getSalaryAt(vzCurJ, vzCurM);
         vzBalance *= (1 + monthlyRate);
-        vzBalance += vzMonthlyAnsparen;
-        if (bruttoValue && sonderzahlungen.urlaubsgeld && vzCurM === 5 && !(vzCurJ === ansparStartJ && vzCurM <= ansparStartM)) {
-          vzBalance += bruttoValue * 0.69;
+        if (bruttoValue && tfwStundenValue) vzBalance += tfwStundenValue * (vzSalary / vzMonatsStunden);
+        var notFirst = !(vzCurJ === ansparStartJ && vzCurM <= ansparStartM);
+        if (bruttoValue && sonderzahlungen.urlaubsgeld && vzCurM === 5 && notFirst) {
+          vzBalance += getSalaryAt(vzCurJ, 5) * 0.69;
         }
-        if (bruttoValue && sonderzahlungen.weihnachtsgeld && vzCurM === 10 && !(vzCurJ === ansparStartJ && vzCurM <= ansparStartM)) {
-          vzBalance += bruttoValue * 0.55;
+        if (bruttoValue && sonderzahlungen.weihnachtsgeld && vzCurM === 10 && notFirst) {
+          vzBalance += getSalaryAt(vzCurJ, 10) * 0.55;
         }
-        if (bruttoValue && sonderzahlungen.tzug && vzCurM === 6 && !(vzCurJ === ansparStartJ && vzCurM <= ansparStartM)) {
-          vzBalance += bruttoValue * 0.275;
+        if (bruttoValue && sonderzahlungen.tzug && vzCurM === 6 && notFirst) {
+          vzBalance += getSalaryAt(vzCurJ, 6) * 0.275;
         }
       }
       var totalOhneZins = (guthabenValue || 0) + tfwAnsparenValue + sonderzahlungenTotal;
@@ -775,7 +1016,18 @@
         html += '<div class="breakdown-row"><span class="breakdown-label">' + t('breakdownTfwGuthaben') + '</span><span class="breakdown-value" style="color: #2e6b2e;">' + formatCurrency(guthabenValue) + '</span></div>';
       }
       if (tfwAnsparenValue > 0) {
-        html += '<div class="breakdown-row"><span class="breakdown-label">' + t('breakdownTfwAnsparen') + '<br><span style="font-weight:400;font-size:0.8rem;">' + tfwAnsparenMonate + ' ' + monateLabel(tfwAnsparenMonate) + ' \u00D7 ' + tfwStundenValue + ' Std \u00D7 ' + formatCurrency(bruttoValue / (wochenstundenValue * 52 / 12)) + '/Std</span></span><span class="breakdown-value" style="color: #2e6b2e;">' + formatCurrency(tfwAnsparenValue) + '</span></div>';
+        var ansparDetail = '';
+        if (tfwAnsparenSegmente.length > 1) {
+          var segLines = [];
+          for (var si = 0; si < tfwAnsparenSegmente.length; si++) {
+            var seg = tfwAnsparenSegmente[si];
+            segLines.push(seg.monate + ' ' + monateLabel(seg.monate) + ' \u00D7 ' + seg.stunden + ' Std \u00D7 ' + formatCurrency(seg.stundenlohn) + '/Std');
+          }
+          ansparDetail = segLines.join('<br>');
+        } else {
+          ansparDetail = tfwAnsparenMonate + ' ' + monateLabel(tfwAnsparenMonate) + ' \u00D7 ' + tfwStundenValue + ' Std \u00D7 ' + formatCurrency(bruttoValue / (wochenstundenValue * 52 / 12)) + '/Std';
+        }
+        html += '<div class="breakdown-row"><span class="breakdown-label">' + t('breakdownTfwAnsparen') + '<br><span style="font-weight:400;font-size:0.8rem;">' + ansparDetail + '</span></span><span class="breakdown-value" style="color: #2e6b2e;">' + formatCurrency(tfwAnsparenValue) + '</span></div>';
       }
       var hatSzAusgewaehlt = sonderzahlungen.urlaubsgeld || sonderzahlungen.weihnachtsgeld || sonderzahlungen.tzug;
       if (sonderzahlungenTotal > 0) {
@@ -802,24 +1054,9 @@
       }
 
       if (timelineMonths.length > 1 && timelineMonths.length <= 60) {
-        var monthlyAnsparen = 0;
-        if (tfwStundenValue && bruttoValue) {
-          var msStd = wochenstundenValue * 52 / 12;
-          monthlyAnsparen = tfwStundenValue * (bruttoValue / msStd);
-        }
+        var tlMsStd = wochenstundenValue * 52 / 12;
 
-        var szEvents = [];
-        if (sonderzahlungen.urlaubsgeld && bruttoValue) {
-          szEvents.push({ month: 5, betrag: bruttoValue * 0.69, label: t('timelineUrlaubsgeld'), color: '#f59e0b' });
-        }
-        if (sonderzahlungen.weihnachtsgeld && bruttoValue) {
-          szEvents.push({ month: 10, betrag: bruttoValue * 0.55, label: t('timelineWeihnachtsgeld'), color: '#8b5cf6' });
-        }
-        if (bruttoValue && sonderzahlungen.tzug) {
-          szEvents.push({ month: 6, betrag: bruttoValue * 0.275, label: t('timelineTzugA'), color: '#ec4899' });
-        }
-
-        // Kumulativen Kontostand berechnen (ggf. mit Verzinsung)
+        // Kumulativen Kontostand berechnen (ggf. mit Verzinsung und Gehaltserhöhungen)
         var points = []; // {label, balance, isAnspar, szHits: []}
         var balance = guthabenValue || 0;
         var szMarkers = [];
@@ -829,28 +1066,38 @@
           var tm = timelineMonths[ti];
           var isAnspar = tm.year < tfwStartJ || (tm.year === tfwStartJ && tm.month < tfwStartM);
           var szHits = [];
+          var tlSalary = getSalaryAt(tm.year, tm.month);
 
           var monatAnsparen = 0;
           var monatEntnahme = 0;
           if (isAnspar) {
             if (tlMonthlyRate > 0) balance *= (1 + tlMonthlyRate);
-            monatAnsparen = monthlyAnsparen;
-            balance += monthlyAnsparen;
-            for (var si = 0; si < szEvents.length; si++) {
-              if (tm.month === szEvents[si].month && !(tm.year === ansparStartJ && tm.month <= ansparStartM)) {
-                balance += szEvents[si].betrag;
-                szHits.push(szEvents[si]);
-              }
+            if (tfwStundenValue && bruttoValue) {
+              monatAnsparen = tfwStundenValue * (tlSalary / tlMsStd);
+              balance += monatAnsparen;
+            }
+            var tlNotFirst = !(tm.year === ansparStartJ && tm.month <= ansparStartM);
+            if (sonderzahlungen.urlaubsgeld && bruttoValue && tm.month === 5 && tlNotFirst) {
+              var ugEv = { month: 5, betrag: getSalaryAt(tm.year, 5) * 0.69, label: t('timelineUrlaubsgeld'), color: '#f59e0b' };
+              balance += ugEv.betrag; szHits.push(ugEv);
+            }
+            if (sonderzahlungen.weihnachtsgeld && bruttoValue && tm.month === 10 && tlNotFirst) {
+              var wgEv = { month: 10, betrag: getSalaryAt(tm.year, 10) * 0.55, label: t('timelineWeihnachtsgeld'), color: '#8b5cf6' };
+              balance += wgEv.betrag; szHits.push(wgEv);
+            }
+            if (sonderzahlungen.tzug && bruttoValue && tm.month === 6 && tlNotFirst) {
+              var tzEv = { month: 6, betrag: getSalaryAt(tm.year, 6) * 0.275, label: t('timelineTzugA'), color: '#ec4899' };
+              balance += tzEv.betrag; szHits.push(tzEv);
             }
           } else {
             // Entnahme: anteilig für Randmonate
             var isFirstMonth = (tm.year === vonDate.getFullYear() && tm.month === vonDate.getMonth());
             var isLastMonth = (tm.year === bisDate.getFullYear() && tm.month === bisDate.getMonth());
-            monatEntnahme = bruttoValue;
+            monatEntnahme = tlSalary;
             if (isFirstMonth && restTageVor > 0) {
-              monatEntnahme = (analyse.arbeitstageVor / analyse.arbeitstageVorGesamt) * bruttoValue;
+              monatEntnahme = (analyse.arbeitstageVor / analyse.arbeitstageVorGesamt) * tlSalary;
             } else if (isLastMonth && restTageNach > 0) {
-              monatEntnahme = (analyse.arbeitstageNach / analyse.arbeitstageNachGesamt) * bruttoValue;
+              monatEntnahme = (analyse.arbeitstageNach / analyse.arbeitstageNachGesamt) * tlSalary;
             }
             balance -= monatEntnahme;
           }
@@ -1045,11 +1292,16 @@
         if (startBal > 0) {
           html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:#22c55e;"></span>' + t('timelineGuthaben') + '</div>';
         }
-        if (monthlyAnsparen > 0) {
+        if (tfwStundenValue && bruttoValue) {
           html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:#3b82f6;"></span>' + t('timelineAnsparen') + '</div>';
         }
-        for (var sn = 0; sn < szEvents.length; sn++) {
-          html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:' + szEvents[sn].color + ';border-radius:50%;"></span>' + szEvents[sn].label + '</div>';
+        var szLegendSeen = {};
+        for (var sn = 0; sn < szMarkers.length; sn++) {
+          var szLeg = szMarkers[sn].sz;
+          if (!szLegendSeen[szLeg.label]) {
+            szLegendSeen[szLeg.label] = true;
+            html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:' + szLeg.color + ';border-radius:50%;"></span>' + szLeg.label + '</div>';
+          }
         }
         html += '<div class="timeline-legend-item"><span class="timeline-legend-color" style="background:var(--color-accent);"></span>' + t('timelineEntnahme') + '</div>';
         if (fristMonthIdx >= 0) {
@@ -1212,6 +1464,8 @@
     var savedSonderzahlungen = { weihnachtsgeld: sonderzahlungen.weihnachtsgeld, urlaubsgeld: sonderzahlungen.urlaubsgeld, tzug: sonderzahlungen.tzug };
     var savedVerzinsungEnabled = verzinsungEnabled;
     var savedVerzinsungRate = verzinsungRate;
+    var savedGehaltserhoehungenEnabled = gehaltserhoehungenEnabled;
+    var savedGehaltserhoehungen = gehaltserhoehungen.slice();
 
     calculatorEl = null;
     vonDate = null;
@@ -1224,6 +1478,8 @@
     sonderzahlungen = { weihnachtsgeld: false, urlaubsgeld: false, tzug: false };
     verzinsungEnabled = false;
     verzinsungRate = 3.1;
+    gehaltserhoehungenEnabled = false;
+    gehaltserhoehungen = [];
     handleHash();
 
     // Restore values after rebuild
@@ -1293,6 +1549,16 @@
       if (vzRi) vzRi.value = savedVerzinsungRate;
       var vzLr = document.querySelector('#vz-label-rate');
       if (vzLr) vzLr.textContent = '(' + String(savedVerzinsungRate).replace('.', ',') + '\u00A0%)';
+    }
+    if (savedGehaltserhoehungenEnabled && savedGehaltserhoehungen.length > 0) {
+      gehaltserhoehungenEnabled = true;
+      gehaltserhoehungen = savedGehaltserhoehungen;
+      var geCb = document.querySelector('#ge-enabled');
+      var geContentEl = document.querySelector('#ge-content');
+      var geListEl = document.querySelector('#ge-list');
+      if (geCb) geCb.checked = true;
+      if (geContentEl) geContentEl.style.display = '';
+      if (geListEl) renderGehaltserhoehungenList(geListEl);
       if (vzSr) { vzSr.style.opacity = '1'; vzSr.style.pointerEvents = ''; }
     }
 
