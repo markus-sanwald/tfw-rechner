@@ -328,7 +328,8 @@
   var tfwStundenValue = null;
   var tfwStartMonatValue = null; // {year, month} oder null = aktueller Monat
   var sonderzahlungen = { weihnachtsgeld: false, urlaubsgeld: false, tzug: false };
-  var ECKENTGELT_BW = 3592;
+  var verzinsungEnabled = false;
+  var verzinsungRate = 3.1;
   var vonPicker = null;
   var bisPicker = null;
   var resultDiv = null;
@@ -531,7 +532,7 @@
       '<div class="checkbox-group">' +
       '<label class="checkbox-label"><input type="checkbox" id="sz-urlaubsgeld"> ' + t('sonderzahlungUrlaubsgeld') + ' <span class="label-info" data-tooltip="' + t('szTooltipUrlaubsgeld') + '">&#9432;</span></label>' +
       '<label class="checkbox-label"><input type="checkbox" id="sz-weihnachtsgeld"> ' + t('sonderzahlungWeihnachtsgeld') + ' <span class="label-info" data-tooltip="' + t('szTooltipWeihnachtsgeld') + '">&#9432;</span></label>' +
-      '<label class="checkbox-label"><input type="checkbox" id="sz-tzug"> ' + t('sonderzahlungTzug') + ' <span class="label-info" data-tooltip="' + t('szTooltipTzug') + '">&#9432;</span></label>' +
+      '<label class="checkbox-label"><input type="checkbox" id="sz-tzug"> ' + t('sonderzahlungTzugA') + ' <span class="label-info" data-tooltip="' + t('szTooltipTzugA') + '">&#9432;</span></label>' +
       '</div>';
     sonderzahlungenGroup.querySelector('#sz-urlaubsgeld').addEventListener('change', function(e) {
       sonderzahlungen.urlaubsgeld = e.target.checked;
@@ -546,6 +547,34 @@
       updateResult();
     });
     calculator.appendChild(sonderzahlungenGroup);
+
+    var verzinsungGroup = document.createElement('div');
+    verzinsungGroup.className = 'form-group';
+    verzinsungGroup.id = 'verzinsung-group';
+    verzinsungGroup.innerHTML =
+      '<label>' + t('labelVerzinsung') + '</label>' +
+      '<div class="checkbox-group">' +
+      '<label class="checkbox-label" style="align-items:center;gap:6px;">' +
+      '<input type="checkbox" id="vz-enabled"> ' + t('verzinsungLabel') +
+      ' <input type="text" id="vz-rate" value="' + String(verzinsungRate).replace('.', ',') + '" style="width:52px;margin:0 2px;text-align:right;" disabled>' +
+      ' % <span class="label-info" data-tooltip="' + t('vzTooltip') + '">&#9432;</span>' +
+      '</label>' +
+      '</div>';
+    var vzCheckbox = verzinsungGroup.querySelector('#vz-enabled');
+    var vzRateInput = verzinsungGroup.querySelector('#vz-rate');
+    vzCheckbox.addEventListener('change', function(e) {
+      verzinsungEnabled = e.target.checked;
+      vzRateInput.disabled = !e.target.checked;
+      updateResult();
+    });
+    vzRateInput.addEventListener('input', function(e) {
+      var val = parseFloat(e.target.value.replace(',', '.'));
+      if (!isNaN(val) && val >= 0) {
+        verzinsungRate = val;
+        updateResult();
+      }
+    });
+    calculator.appendChild(verzinsungGroup);
 
     resultDiv = document.createElement('div');
     resultDiv.className = 'result hidden';
@@ -617,8 +646,8 @@
 
     var sonderzahlungenTotal = 0;
     var szDetails = [];
-    var szUrlaubsgeldAnzahl = 0, szWeihnachtsgeldAnzahl = 0, szTzugAAnzahl = 0, szTzugBAnzahl = 0;
-    var szUrlaubsgeldBetrag = 0, szWeihnachtsgeldBetrag = 0, szTzugABetrag = 0, szTzugBBetrag = 0;
+    var szUrlaubsgeldAnzahl = 0, szWeihnachtsgeldAnzahl = 0, szTzugAAnzahl = 0;
+    var szUrlaubsgeldBetrag = 0, szWeihnachtsgeldBetrag = 0, szTzugABetrag = 0;
 
     if (bruttoValue && sonderzahlungen.urlaubsgeld) {
       szUrlaubsgeldAnzahl = zahlungenBisStart(5);
@@ -636,20 +665,12 @@
         szDetails.push(szWeihnachtsgeldAnzahl + '\u00D7 Weihnachtsgeld (' + formatCurrency(szWeihnachtsgeldBetrag) + ')');
       }
     }
-    if (sonderzahlungen.tzug) {
-      if (bruttoValue) {
-        szTzugAAnzahl = zahlungenBisStart(6);
-        szTzugABetrag = szTzugAAnzahl * bruttoValue * 0.275;
-        if (szTzugABetrag > 0) {
-          sonderzahlungenTotal += szTzugABetrag;
-          szDetails.push(szTzugAAnzahl + '\u00D7 T-Zug A (' + formatCurrency(szTzugABetrag) + ')');
-        }
-      }
-      szTzugBAnzahl = zahlungenBisStart(1);
-      szTzugBBetrag = szTzugBAnzahl * ECKENTGELT_BW * 0.265;
-      if (szTzugBBetrag > 0) {
-        sonderzahlungenTotal += szTzugBBetrag;
-        szDetails.push(szTzugBAnzahl + '\u00D7 T-Zug B (' + formatCurrency(szTzugBBetrag) + ')');
+    if (bruttoValue && sonderzahlungen.tzug) {
+      szTzugAAnzahl = zahlungenBisStart(6);
+      szTzugABetrag = szTzugAAnzahl * bruttoValue * 0.275;
+      if (szTzugABetrag > 0) {
+        sonderzahlungenTotal += szTzugABetrag;
+        szDetails.push(szTzugAAnzahl + '\u00D7 T-Zug A (' + formatCurrency(szTzugABetrag) + ')');
       }
     }
 
@@ -670,9 +691,39 @@
       }
     }
 
+    // Verzinsung: monatliche Compound-Interest-Berechnung
+    var verzinsungsGewinn = 0;
+    if (verzinsungEnabled && verzinsungRate > 0 && tfwAnsparenMonate > 0) {
+      var monthlyRate = Math.pow(1 + verzinsungRate / 100, 1 / 12) - 1;
+      var vzBalance = guthabenValue || 0;
+      var vzMonthlyAnsparen = 0;
+      if (bruttoValue && tfwStundenValue) {
+        var vzMonatsStunden = wochenstundenValue * 52 / 12;
+        vzMonthlyAnsparen = tfwStundenValue * (bruttoValue / vzMonatsStunden);
+      }
+      for (var vi = 0; vi < tfwAnsparenMonate; vi++) {
+        var vzAbsMonth = ansparStartM + vi;
+        var vzCurM = vzAbsMonth % 12;
+        var vzCurJ = ansparStartJ + Math.floor(vzAbsMonth / 12);
+        vzBalance *= (1 + monthlyRate);
+        vzBalance += vzMonthlyAnsparen;
+        if (bruttoValue && sonderzahlungen.urlaubsgeld && vzCurM === 5 && !(vzCurJ === ansparStartJ && vzCurM <= ansparStartM)) {
+          vzBalance += bruttoValue * 0.69;
+        }
+        if (bruttoValue && sonderzahlungen.weihnachtsgeld && vzCurM === 10 && !(vzCurJ === ansparStartJ && vzCurM <= ansparStartM)) {
+          vzBalance += bruttoValue * 0.55;
+        }
+        if (bruttoValue && sonderzahlungen.tzug && vzCurM === 6 && !(vzCurJ === ansparStartJ && vzCurM <= ansparStartM)) {
+          vzBalance += bruttoValue * 0.275;
+        }
+      }
+      var totalOhneZins = (guthabenValue || 0) + tfwAnsparenValue + sonderzahlungenTotal;
+      verzinsungsGewinn = vzBalance - totalOhneZins;
+    }
+
     // Blauer Kasten: Saldo
     // Sonderzahlungen sind Einbringungen (Guthaben-Seite)
-    var totalGuthaben = (guthabenValue || 0) + tfwAnsparenValue + sonderzahlungenTotal;
+    var totalGuthaben = (guthabenValue || 0) + tfwAnsparenValue + sonderzahlungenTotal + verzinsungsGewinn;
     if (bruttoValue) {
       var saldo = totalGuthaben - totalSalary;
       var saldoColor = saldo >= 0 ? '#2e6b2e' : 'var(--color-accent)';
@@ -724,6 +775,9 @@
       } else if (hatSzAusgewaehlt) {
         html += '<div class="breakdown-row"><span class="breakdown-label">' + t('breakdownSonderzahlungen') + '<br><span style="font-weight:400;font-size:0.8rem;">' + t('szKeineVorBeginn') + '</span></span><span class="breakdown-value" style="color: var(--color-text-muted);">0,00 \u20AC</span></div>';
       }
+      if (verzinsungsGewinn > 0) {
+        html += '<div class="breakdown-row"><span class="breakdown-label">' + t('breakdownVerzinsung') + '<br><span style="font-weight:400;font-size:0.8rem;">' + String(verzinsungRate).replace('.', ',') + '% p.a., ' + tfwAnsparenMonate + ' ' + monateLabel(tfwAnsparenMonate) + '</span></span><span class="breakdown-value" style="color: #2e6b2e;">' + formatCurrency(verzinsungsGewinn) + '</span></div>';
+      }
       html += '</div>';
     }
 
@@ -753,17 +807,15 @@
         if (sonderzahlungen.weihnachtsgeld && bruttoValue) {
           szEvents.push({ month: 10, betrag: bruttoValue * 0.55, label: t('timelineWeihnachtsgeld'), color: '#8b5cf6' });
         }
-        if (sonderzahlungen.tzug) {
-          if (bruttoValue) {
-            szEvents.push({ month: 6, betrag: bruttoValue * 0.275, label: t('timelineTzugA'), color: '#ec4899' });
-          }
-          szEvents.push({ month: 1, betrag: ECKENTGELT_BW * 0.265, label: t('timelineTzugB'), color: '#14b8a6' });
+        if (bruttoValue && sonderzahlungen.tzug) {
+          szEvents.push({ month: 6, betrag: bruttoValue * 0.275, label: t('timelineTzugA'), color: '#ec4899' });
         }
 
-        // Kumulativen Kontostand berechnen
+        // Kumulativen Kontostand berechnen (ggf. mit Verzinsung)
         var points = []; // {label, balance, isAnspar, szHits: []}
         var balance = guthabenValue || 0;
         var szMarkers = [];
+        var tlMonthlyRate = verzinsungEnabled && verzinsungRate > 0 ? Math.pow(1 + verzinsungRate / 100, 1 / 12) - 1 : 0;
 
         for (var ti = 0; ti < timelineMonths.length; ti++) {
           var tm = timelineMonths[ti];
@@ -773,6 +825,7 @@
           var monatAnsparen = 0;
           var monatEntnahme = 0;
           if (isAnspar) {
+            if (tlMonthlyRate > 0) balance *= (1 + tlMonthlyRate);
             monatAnsparen = monthlyAnsparen;
             balance += monthlyAnsparen;
             for (var si = 0; si < szEvents.length; si++) {
@@ -1149,6 +1202,8 @@
     var savedTfwStunden = tfwStundenValue;
     var savedTfwStartMonat = tfwStartMonatValue;
     var savedSonderzahlungen = { weihnachtsgeld: sonderzahlungen.weihnachtsgeld, urlaubsgeld: sonderzahlungen.urlaubsgeld, tzug: sonderzahlungen.tzug };
+    var savedVerzinsungEnabled = verzinsungEnabled;
+    var savedVerzinsungRate = verzinsungRate;
 
     calculatorEl = null;
     vonDate = null;
@@ -1159,6 +1214,8 @@
     tfwStundenValue = null;
     tfwStartMonatValue = null;
     sonderzahlungen = { weihnachtsgeld: false, urlaubsgeld: false, tzug: false };
+    verzinsungEnabled = false;
+    verzinsungRate = 3.1;
     handleHash();
 
     // Restore values after rebuild
@@ -1217,6 +1274,14 @@
       sonderzahlungen.tzug = true;
       var cb3 = document.querySelector('#sz-tzug');
       if (cb3) cb3.checked = true;
+    }
+    if (savedVerzinsungEnabled) {
+      verzinsungEnabled = true;
+      verzinsungRate = savedVerzinsungRate;
+      var vzCb = document.querySelector('#vz-enabled');
+      var vzRi = document.querySelector('#vz-rate');
+      if (vzCb) vzCb.checked = true;
+      if (vzRi) { vzRi.disabled = false; vzRi.value = String(savedVerzinsungRate).replace('.', ','); }
     }
 
     updateResult();
