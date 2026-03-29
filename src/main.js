@@ -556,18 +556,18 @@
       '<div class="checkbox-group">' +
       '<label class="checkbox-label" style="align-items:center;gap:8px;">' +
       '<input type="checkbox" id="vz-enabled"> ' + t('verzinsungLabel') +
+      ' <span id="vz-label-rate" style="color:var(--color-text-muted);font-size:0.85rem;">(' + String(verzinsungRate).replace('.', ',') + '\u00A0%)</span>' +
       '</label>' +
       '<div id="vz-slider-row" style="display:flex;align-items:center;gap:10px;margin-top:6px;opacity:0.4;pointer-events:none;">' +
       '<span style="font-size:0.85rem;white-space:nowrap;">0 %</span>' +
       '<input type="range" id="vz-rate" min="0" max="5" step="0.1" value="' + verzinsungRate + '" style="flex:1;">' +
       '<span style="font-size:0.85rem;white-space:nowrap;">5 %</span>' +
-      '<span id="vz-rate-display" style="font-size:0.9rem;font-weight:600;min-width:38px;text-align:right;">' + String(verzinsungRate).replace('.', ',') + '\u00A0%</span>' +
       '</div>' +
       '</div>';
     var vzCheckbox = verzinsungGroup.querySelector('#vz-enabled');
     var vzRateInput = verzinsungGroup.querySelector('#vz-rate');
     var vzSliderRow = verzinsungGroup.querySelector('#vz-slider-row');
-    var vzRateDisplay = verzinsungGroup.querySelector('#vz-rate-display');
+    var vzLabelRate = verzinsungGroup.querySelector('#vz-label-rate');
     vzCheckbox.addEventListener('change', function(e) {
       verzinsungEnabled = e.target.checked;
       vzSliderRow.style.opacity = e.target.checked ? '1' : '0.4';
@@ -578,7 +578,7 @@
       var val = parseFloat(e.target.value);
       if (!isNaN(val) && val >= 0) {
         verzinsungRate = val;
-        vzRateDisplay.textContent = String(val).replace('.', ',') + '\u00A0%';
+        vzLabelRate.textContent = '(' + String(val).replace('.', ',') + '\u00A0%)';
         updateResult();
       }
     });
@@ -1289,10 +1289,10 @@
       var vzCb = document.querySelector('#vz-enabled');
       var vzRi = document.querySelector('#vz-rate');
       var vzSr = document.querySelector('#vz-slider-row');
-      var vzRd = document.querySelector('#vz-rate-display');
       if (vzCb) vzCb.checked = true;
       if (vzRi) vzRi.value = savedVerzinsungRate;
-      if (vzRd) vzRd.textContent = String(savedVerzinsungRate).replace('.', ',') + '\u00A0%';
+      var vzLr = document.querySelector('#vz-label-rate');
+      if (vzLr) vzLr.textContent = '(' + String(savedVerzinsungRate).replace('.', ',') + '\u00A0%)';
       if (vzSr) { vzSr.style.opacity = '1'; vzSr.style.pointerEvents = ''; }
     }
 
