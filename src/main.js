@@ -970,19 +970,24 @@
     }
 
     // Verzinsung: monatliche Compound-Interest-Berechnung
+    // Verzinsung läuft ab aktuellem Monat bis Beginn Freistellung,
+    // TFW-Stunden-Einzahlung erst ab ansparStart
+    var verzinsungsMonate = (tfwStartJ - jetztJahr) * 12 + (tfwStartM - jetztMonat);
     var verzinsungsGewinn = 0;
-    if (verzinsungEnabled && verzinsungRate > 0 && tfwAnsparenMonate > 0) {
+    if (verzinsungEnabled && verzinsungRate > 0 && verzinsungsMonate > 0) {
       var monthlyRate = Math.pow(1 + verzinsungRate / 100, 1 / 12) - 1;
       var vzBalance = guthabenValue || 0;
       var vzMonatsStunden = wochenstundenValue * 52 / 12;
-      for (var vi = 0; vi < tfwAnsparenMonate; vi++) {
-        var vzAbsMonth = ansparStartM + vi;
+      for (var vi = 0; vi < verzinsungsMonate; vi++) {
+        var vzAbsMonth = jetztMonat + vi;
         var vzCurM = vzAbsMonth % 12;
-        var vzCurJ = ansparStartJ + Math.floor(vzAbsMonth / 12);
+        var vzCurJ = jetztJahr + Math.floor(vzAbsMonth / 12);
         var vzSalary = getSalaryAt(vzCurJ, vzCurM);
         vzBalance *= (1 + monthlyRate);
-        if (bruttoValue && tfwStundenValue) vzBalance += tfwStundenValue * (vzSalary / vzMonatsStunden);
-        var notFirst = !(vzCurJ === ansparStartJ && vzCurM <= ansparStartM);
+        // TFW-Stunden nur ab Anspar-Startmonat einrechnen
+        var vzInAnspar = (vzCurJ > ansparStartJ || (vzCurJ === ansparStartJ && vzCurM >= ansparStartM));
+        if (bruttoValue && tfwStundenValue && vzInAnspar) vzBalance += tfwStundenValue * (vzSalary / vzMonatsStunden);
+        var notFirst = !(vzCurJ === jetztJahr && vzCurM <= jetztMonat);
         if (bruttoValue && sonderzahlungen.urlaubsgeld && vzCurM === 5 && notFirst) {
           vzBalance += getSalaryAt(vzCurJ, 5) * 0.69;
         }
@@ -1072,7 +1077,7 @@
     if (bruttoValue) {
       var MONTHS = getMonths();
       var timelineMonths = [];
-      var tmStart = new Date(ansparStartJ, ansparStartM, 1);
+      var tmStart = new Date(jetztJahr, jetztMonat, 1);
       var tmEnd = new Date(bisDate.getFullYear(), bisDate.getMonth(), 1);
       var tmCur = new Date(tmStart);
       while (tmCur <= tmEnd) {
@@ -1099,11 +1104,13 @@
           var monatEntnahme = 0;
           if (isAnspar) {
             if (tlMonthlyRate > 0) balance *= (1 + tlMonthlyRate);
-            if (tfwStundenValue && bruttoValue) {
+            // TFW-Stunden nur ab Anspar-Startmonat
+            var tlInAnspar = (tm.year > ansparStartJ || (tm.year === ansparStartJ && tm.month >= ansparStartM));
+            if (tfwStundenValue && bruttoValue && tlInAnspar) {
               monatAnsparen = tfwStundenValue * (tlSalary / tlMsStd);
               balance += monatAnsparen;
             }
-            var tlNotFirst = !(tm.year === ansparStartJ && tm.month <= ansparStartM);
+            var tlNotFirst = !(tm.year === jetztJahr && tm.month <= jetztMonat);
             if (sonderzahlungen.urlaubsgeld && bruttoValue && tm.month === 5 && tlNotFirst) {
               var ugEv = { month: 5, betrag: getSalaryAt(tm.year, 5) * 0.69, label: t('timelineUrlaubsgeld'), color: '#f59e0b' };
               balance += ugEv.betrag; szHits.push(ugEv);
