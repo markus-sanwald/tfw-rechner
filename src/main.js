@@ -563,6 +563,10 @@
       '<input type="text" inputmode="decimal" id="brutto" placeholder="' + t('bruttoPlaceholder') + '" value="">' +
       '<span class="input-euro-suffix">\u20AC</span>' +
       '</div>';
+    var bruttoHint = document.createElement('div');
+    bruttoHint.style.cssText = 'margin-top:4px;font-size:0.8rem;color:var(--color-text-muted);';
+    bruttoHint.innerHTML = t('bruttoHint');
+    bruttoGroup.appendChild(bruttoHint);
     setupCurrencyInput(bruttoGroup.querySelector('#brutto'), function(val) {
       bruttoValue = val;
       updateResult();
