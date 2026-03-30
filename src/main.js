@@ -403,13 +403,41 @@
   }
 
   function renderGehaltserhoehungenList(container) {
-    gehaltserhoehungen.sort(function(a, b) { return a.year !== b.year ? a.year - b.year : a.month - b.month; });
     container.innerHTML = '';
+    var _now = new Date();
+    var _baseMinY = _now.getFullYear(), _baseMinM = _now.getMonth() + 1;
+    if (_baseMinM > 11) { _baseMinM = 0; _baseMinY++; }
+    var _globalMaxY, _globalMaxM;
+    if (vonDate) {
+      _globalMaxM = vonDate.getMonth() - 1;
+      _globalMaxY = vonDate.getFullYear();
+      if (_globalMaxM < 0) { _globalMaxM = 11; _globalMaxY--; }
+    } else {
+      _globalMaxY = _baseMinY + 8; _globalMaxM = 11;
+    }
+
     for (var i = 0; i < gehaltserhoehungen.length; i++) {
       (function(idx) {
         var g = gehaltserhoehungen[idx];
         var row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:flex-end;gap:12px;margin-bottom:12px;';
+
+        // Min: for first entry = next month; for subsequent = month after previous entry
+        var _minY = _baseMinY, _minM = _baseMinM;
+        if (idx > 0) {
+          var prev = gehaltserhoehungen[idx - 1];
+          _minM = prev.month + 1;
+          _minY = prev.year;
+          if (_minM > 11) { _minM = 0; _minY++; }
+        }
+        // Max: if there's a next entry, month before it; otherwise global max
+        var _maxY = _globalMaxY, _maxM = _globalMaxM;
+        if (idx < gehaltserhoehungen.length - 1) {
+          var next = gehaltserhoehungen[idx + 1];
+          _maxM = next.month - 1;
+          _maxY = next.year;
+          if (_maxM < 0) { _maxM = 11; _maxY--; }
+        }
 
         // Datum-Dropdown
         var dateGroup = document.createElement('div');
@@ -419,31 +447,12 @@
         dateLabel.textContent = t('geAb');
         var dateSelect = document.createElement('select');
         dateSelect.style.cssText = 'height:46px;padding:0 10px;border:1.5px solid var(--color-border);border-radius:var(--radius);background:#fff;color:var(--color-text);font-size:1rem;font-family:inherit;cursor:pointer;box-sizing:border-box;';
-        // Min: next month from today; Max: month before vonDate (or far future if not set)
-        var _now = new Date();
-        var _minY = _now.getFullYear(), _minM = _now.getMonth() + 1;
-        if (_minM > 11) { _minM = 0; _minY++; }
-        var _maxY, _maxM;
-        if (vonDate) {
-          _maxM = vonDate.getMonth() - 1;
-          _maxY = vonDate.getFullYear();
-          if (_maxM < 0) { _maxM = 11; _maxY--; }
-        } else {
-          _maxY = _minY + 8; _maxM = 11;
-        }
-        // Clamp selected value into valid range
-        var _selY = g.year, _selM = g.month;
-        if (_selY < _minY || (_selY === _minY && _selM < _minM)) { _selY = _minY; _selM = _minM; }
-        if (_selY > _maxY || (_selY === _maxY && _selM > _maxM)) { _selY = _maxY; _selM = _maxM; }
-        if (_selY !== g.year || _selM !== g.month) {
-          gehaltserhoehungen[idx].year = _selY;
-          gehaltserhoehungen[idx].month = _selM;
-        }
-        dateSelect.innerHTML = buildMonthYearOptions(_selY, _selM, _minY, _minM, _maxY, _maxM);
+        dateSelect.innerHTML = buildMonthYearOptions(g.year, g.month, _minY, _minM, _maxY, _maxM);
         dateSelect.addEventListener('change', function() {
           var parts = dateSelect.value.split('-');
           gehaltserhoehungen[idx].year = parseInt(parts[0]);
           gehaltserhoehungen[idx].month = parseInt(parts[1]);
+          renderGehaltserhoehungenList(container);
           updateResult();
         });
         dateGroup.appendChild(dateLabel);
@@ -489,6 +498,9 @@
         container.appendChild(row);
       })(i);
     }
+    // Show/hide add button (max 3)
+    var addBtn = document.querySelector('#ge-add-btn');
+    if (addBtn) addBtn.style.display = gehaltserhoehungen.length >= 3 ? 'none' : '';
   }
 
   function setupCurrencyInput(input, onChange, allowZero) {
@@ -751,12 +763,23 @@
 
     var geAddBtn = document.createElement('button');
     geAddBtn.type = 'button';
+    geAddBtn.id = 'ge-add-btn';
     geAddBtn.textContent = t('gehaltserhoehungHinzufuegen');
     geAddBtn.style.cssText = 'margin-top:6px;font-size:0.85rem;padding:6px 14px;cursor:pointer;background:none;border:1px solid var(--color-border);border-radius:6px;color:var(--color-primary);font-weight:500;';
     geAddBtn.addEventListener('click', function() {
-      var now = new Date();
-      var defM = now.getMonth() + 1, defY = now.getFullYear();
-      if (defM > 11) { defM = 0; defY++; }
+      if (gehaltserhoehungen.length >= 3) return;
+      var defM, defY;
+      if (gehaltserhoehungen.length > 0) {
+        var last = gehaltserhoehungen[gehaltserhoehungen.length - 1];
+        defM = last.month + 1;
+        defY = last.year;
+        if (defM > 11) { defM = 0; defY++; }
+      } else {
+        var now = new Date();
+        defM = now.getMonth() + 1;
+        defY = now.getFullYear();
+        if (defM > 11) { defM = 0; defY++; }
+      }
       gehaltserhoehungen.push({ year: defY, month: defM, brutto: bruttoValue || 0 });
       renderGehaltserhoehungenList(geList);
       updateResult();
