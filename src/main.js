@@ -907,7 +907,7 @@
       szUgDaten.forEach(function(d) { szUrlaubsgeldBetrag += getSalaryAt(d.year, d.month) * 0.69; });
       if (szUrlaubsgeldBetrag > 0) {
         sonderzahlungenTotal += szUrlaubsgeldBetrag;
-        szDetails.push(szUrlaubsgeldAnzahl + '\u00D7 Urlaubsgeld (' + formatCurrency(szUrlaubsgeldBetrag) + ')');
+        szDetails.push(szUrlaubsgeldAnzahl + '\u00D7 ' + t('sonderzahlungUrlaubsgeld') + ' (' + formatCurrency(szUrlaubsgeldBetrag) + ')');
       }
     }
     if (bruttoValue && sonderzahlungen.weihnachtsgeld) {
@@ -916,7 +916,7 @@
       szWgDaten.forEach(function(d) { szWeihnachtsgeldBetrag += getSalaryAt(d.year, d.month) * 0.55; });
       if (szWeihnachtsgeldBetrag > 0) {
         sonderzahlungenTotal += szWeihnachtsgeldBetrag;
-        szDetails.push(szWeihnachtsgeldAnzahl + '\u00D7 Weihnachtsgeld (' + formatCurrency(szWeihnachtsgeldBetrag) + ')');
+        szDetails.push(szWeihnachtsgeldAnzahl + '\u00D7 ' + t('sonderzahlungWeihnachtsgeld') + ' (' + formatCurrency(szWeihnachtsgeldBetrag) + ')');
       }
     }
     if (bruttoValue && sonderzahlungen.tzug) {
@@ -925,7 +925,7 @@
       szTzDaten.forEach(function(d) { szTzugABetrag += getSalaryAt(d.year, d.month) * 0.275; });
       if (szTzugABetrag > 0) {
         sonderzahlungenTotal += szTzugABetrag;
-        szDetails.push(szTzugAAnzahl + '\u00D7 T-Zug A (' + formatCurrency(szTzugABetrag) + ')');
+        szDetails.push(szTzugAAnzahl + '\u00D7 ' + t('sonderzahlungTzugA') + ' (' + formatCurrency(szTzugABetrag) + ')');
       }
     }
 
