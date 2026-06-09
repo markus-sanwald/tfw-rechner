@@ -23,6 +23,27 @@
     var viewYear = new Date().getFullYear();
     var viewMonth = new Date().getMonth();
     var showMonthSelect = false;
+    var minDate = null;
+
+    function getEffectiveMin() {
+      var today = new Date();
+      var todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      return (minDate && minDate > todayMidnight) ? minDate : todayMidnight;
+    }
+
+    function showError(msg) {
+      var errEl = wrapper.querySelector('.datepicker-error');
+      var inp = wrapper.querySelector('.datepicker-input');
+      if (errEl) errEl.textContent = msg;
+      if (inp) inp.classList.add('invalid');
+    }
+
+    function clearError() {
+      var errEl = wrapper.querySelector('.datepicker-error');
+      var inp = wrapper.querySelector('.datepicker-input');
+      if (errEl) errEl.textContent = '';
+      if (inp) inp.classList.remove('invalid');
+    }
 
     var wrapper = document.createElement('div');
     wrapper.className = 'form-group';
@@ -33,7 +54,7 @@
       wrapper.innerHTML =
         '<label for="' + id + '">' + t(labelKey) + '</label>' +
         '<div class="datepicker-wrapper" id="' + id + '-wrapper">' +
-        '<input type="text" class="datepicker-input" id="' + id + '" readonly placeholder="' + t('dpPlaceholder') + '">' +
+        '<input type="text" class="datepicker-input" id="' + id + '" placeholder="' + t('dpPlaceholder') + '" autocomplete="off">' +
         '<span class="datepicker-icon">' +
         '<svg width="16" height="16" viewBox="0 0 16 16" fill="none">' +
         '<rect x="1" y="3" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/>' +
@@ -57,10 +78,77 @@
         '<button type="button" class="dp-footer-btn dp-clear">' + t('dpClear') + '</button>' +
         '</div>' +
         '</div>' +
-        '</div>';
+        '</div>' +
+        '<div class="datepicker-error"></div>';
       if (selectedDate) {
         wrapper.querySelector('.datepicker-input').value = formatDate(selectedDate);
       }
+
+      var input = wrapper.querySelector('.datepicker-input');
+
+      input.addEventListener('input', function() {
+        var digits = input.value.replace(/\D/g, '').slice(0, 8);
+        var formatted;
+        if (digits.length <= 2) {
+          formatted = digits;
+        } else if (digits.length <= 4) {
+          formatted = digits.slice(0, 2) + '.' + digits.slice(2);
+        } else {
+          formatted = digits.slice(0, 2) + '.' + digits.slice(2, 4) + '.' + digits.slice(4);
+        }
+        input.value = formatted;
+
+        clearError();
+        var parsed = TFW.parseDate(formatted);
+        if (parsed) {
+          if (parsed >= getEffectiveMin()) {
+            selectedDate = parsed;
+            viewYear = parsed.getFullYear();
+            viewMonth = parsed.getMonth();
+            var els = getElements();
+            if (els.dpWrapper.classList.contains('open')) renderCalendar();
+            onChange(parsed);
+          } else {
+            var todayCheck = new Date(); todayCheck.setHours(0, 0, 0, 0);
+            showError(parsed < todayCheck ? t('dpErrorPast') : t('dpErrorMinDate'));
+          }
+        } else if (formatted.length === 10) {
+          showError(t('dpErrorInvalid'));
+        }
+      });
+
+      input.addEventListener('blur', function() {
+        if (input.value === '') {
+          clearError();
+          if (selectedDate !== null) {
+            selectedDate = null;
+            onChange(null);
+          }
+          return;
+        }
+        var parsed = TFW.parseDate(input.value);
+        if (parsed && parsed >= getEffectiveMin()) {
+          input.value = formatDate(parsed);
+          clearError();
+        } else {
+          input.value = selectedDate ? formatDate(selectedDate) : '';
+          if (parsed) {
+            var todayCheck = new Date(); todayCheck.setHours(0, 0, 0, 0);
+            showError(parsed < todayCheck ? t('dpErrorPast') : t('dpErrorMinDate'));
+          } else if (input.value === '') {
+            clearError();
+          } else {
+            showError(t('dpErrorInvalid'));
+          }
+        }
+      });
+
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === 'Escape') {
+          close();
+          input.blur();
+        }
+      });
     }
 
     buildHTML();
@@ -93,21 +181,27 @@
       var totalDays = daysInMonth(viewYear, viewMonth);
       var prevMonthDays = daysInMonth(viewYear, viewMonth - 1);
       var today = new Date();
+      var effectiveMin = getEffectiveMin();
 
       var html = '';
 
       for (var i = startWeekday - 1; i >= 0; i--) {
         var day = prevMonthDays - i;
-        html += '<button type="button" class="dp-day other-month" data-year="' + (viewMonth === 0 ? viewYear - 1 : viewYear) + '" data-month="' + (viewMonth === 0 ? 11 : viewMonth - 1) + '" data-day="' + day + '">' + day + '</button>';
+        var prevYear = viewMonth === 0 ? viewYear - 1 : viewYear;
+        var prevMonth = viewMonth === 0 ? 11 : viewMonth - 1;
+        var isPast = new Date(prevYear, prevMonth, day) < effectiveMin;
+        html += '<button type="button" class="dp-day other-month' + (isPast ? ' past' : '') + '" data-year="' + prevYear + '" data-month="' + prevMonth + '" data-day="' + day + '">' + day + '</button>';
       }
 
       for (var d = 1; d <= totalDays; d++) {
         var isToday = d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
         var isSelected = selectedDate && d === selectedDate.getDate() && viewMonth === selectedDate.getMonth() && viewYear === selectedDate.getFullYear();
+        var isPastDay = new Date(viewYear, viewMonth, d) < effectiveMin;
         var cls = 'dp-day';
         if (isToday) cls += ' today';
         if (isSelected) cls += ' selected';
-        html += '<button type="button" class="' + cls + '" data-year="' + viewYear + '" data-month="' + viewMonth + '" data-day="' + d + '">' + d + '</button>';
+        if (isPastDay) cls += ' past';
+        html += '<button type="button" class="' + cls + '"' + (isPastDay ? ' disabled' : '') + ' data-year="' + viewYear + '" data-month="' + viewMonth + '" data-day="' + d + '">' + d + '</button>';
       }
 
       var totalCells = startWeekday + totalDays;
@@ -121,6 +215,7 @@
 
     function selectDate(date) {
       selectedDate = date;
+      clearError();
       var els = getElements();
       els.input.value = date ? formatDate(date) : '';
       renderCalendar();
@@ -147,12 +242,15 @@
 
     wrapper.addEventListener('click', function(e) {
       var els = getElements();
-      if (e.target === els.input || e.target.closest('.datepicker-icon')) {
+      if (e.target.closest('.datepicker-icon')) {
         if (els.dpWrapper.classList.contains('open')) {
           close();
         } else {
           open();
         }
+        return;
+      }
+      if (e.target === els.input) {
         return;
       }
 
@@ -213,6 +311,16 @@
       getDate: function() { return selectedDate; },
       rebuild: function() { buildHTML(); renderCalendar(); },
       setHintDate: function(d) { hintDate = d; },
+      setMinDate: function(date) {
+        minDate = date;
+        if (selectedDate && date && selectedDate < date) {
+          selectedDate = null;
+          var els = getElements();
+          if (els.input) els.input.value = '';
+          onChange(null);
+        }
+        if (getElements().dpWrapper.classList.contains('open')) renderCalendar();
+      },
       setDate: function(date) {
         selectedDate = date;
         if (date) {
@@ -347,7 +455,7 @@
 
   function formatNumberDisplay(val) {
     if (val == null || val === '') return '';
-    var num = parseFloat(String(val).replace(/\./g, '').replace(',', '.'));
+    var num = typeof val === 'number' ? val : parseFloat(String(val).replace(/\./g, '').replace(',', '.'));
     if (isNaN(num)) return String(val);
     var parts = num.toFixed(num % 1 === 0 ? 0 : 2).split('.');
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
@@ -537,6 +645,10 @@
     vonPicker = createDatepicker('von', 'labelVon', function(date) {
       vonDate = date;
       if (bisPicker) bisPicker.setHintDate(date);
+      if (bisPicker) {
+        var minBis = date ? new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1) : null;
+        bisPicker.setMinDate(minBis);
+      }
       if (tfwStundenValue && tfwStartMonatGroup) updateTfwStartMonatOptions();
       var geListEl = document.querySelector('#ge-list');
       if (geListEl && gehaltserhoehungenEnabled) renderGehaltserhoehungenList(geListEl);
@@ -1442,6 +1554,13 @@
         var isExpanded = chartContainer.classList.toggle('bd-expanded');
         expandBtn.innerHTML = isExpanded ? '&#x2716;' : '&#x26F6;';
         document.body.style.overflow = isExpanded ? 'hidden' : '';
+      });
+      chartContainer.addEventListener('click', function(e) {
+        if (!chartContainer.classList.contains('bd-expanded') && !e.target.closest('#bd-expand-btn')) {
+          chartContainer.classList.add('bd-expanded');
+          expandBtn.innerHTML = '&#x2716;';
+          document.body.style.overflow = 'hidden';
+        }
       });
       if (bdDocKeyHandler) document.removeEventListener('keydown', bdDocKeyHandler);
       bdDocKeyHandler = function(e) {

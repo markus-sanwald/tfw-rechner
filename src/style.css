@@ -280,7 +280,7 @@ header h1 {
   background-color: var(--color-card);
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius);
-  cursor: pointer;
+  cursor: text;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 
@@ -301,7 +301,8 @@ header h1 {
   top: 50%;
   transform: translateY(-50%);
   color: var(--color-text-muted);
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
   display: flex;
   align-items: center;
 }
@@ -470,6 +471,31 @@ header h1 {
 
 .dp-day.other-month:hover {
   color: var(--color-text-muted);
+}
+
+.dp-day.past {
+  color: var(--color-text-muted);
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+.datepicker-error {
+  font-size: 0.8rem;
+  color: var(--color-accent);
+  margin-top: 0.25rem;
+}
+
+.datepicker-error:empty {
+  display: none;
+}
+
+.datepicker-input.invalid {
+  border-color: var(--color-accent);
+}
+
+.datepicker-input.invalid:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
 }
 
 /* Footer buttons */
@@ -791,6 +817,10 @@ header h1 {
   height: auto;
   margin-top: 0.5rem;
   display: block;
+}
+
+.timeline-chart:not(.bd-expanded) .burndown-svg {
+  cursor: pointer;
 }
 
 .burndown-svg .phase-label {

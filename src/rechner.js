@@ -48,34 +48,45 @@ var TFW = window.TFW || {};
       anzahlMonate = (bis.getFullYear() - von.getFullYear()) * 12
         + (bis.getMonth() - von.getMonth()) + 1;
     } else {
-      var ersterVollerMonat;
-      if (startIstErster) {
-        ersterVollerMonat = new Date(von.getFullYear(), von.getMonth(), 1);
-      } else {
-        ersterVollerMonat = new Date(von.getFullYear(), von.getMonth() + 1, 1);
-        var endeMonatVon = new Date(von.getFullYear(), von.getMonth() + 1, 0);
-        restTageVor = endeMonatVon.getDate() - von.getDate() + 1;
+      var gleichesMonate = (von.getFullYear() === bis.getFullYear() && von.getMonth() === bis.getMonth());
+      if (gleichesMonate) {
+        // Gesamter Zeitraum liegt innerhalb eines einzigen Monats
+        restTageVor = bis.getDate() - von.getDate() + 1;
         restVonDatum = new Date(von.getFullYear(), von.getMonth(), von.getDate());
-        restBisDatumVor = endeMonatVon;
-        arbeitstageVor = arbeitstageZwischen(von, endeMonatVon);
+        restBisDatumVor = new Date(bis.getFullYear(), bis.getMonth(), bis.getDate());
+        arbeitstageVor = arbeitstageZwischen(von, bis);
         arbeitstageVorGesamt = arbeitstageImMonat(von.getFullYear(), von.getMonth());
-      }
-
-      var letztesVollesMonatsende;
-      if (endeIstLetzter) {
-        letztesVollesMonatsende = new Date(bis.getFullYear(), bis.getMonth() + 1, 0);
+        // anzahlMonate und restTageNach bleiben 0
       } else {
-        letztesVollesMonatsende = new Date(bis.getFullYear(), bis.getMonth(), 0);
-        restTageNach = bis.getDate();
-        restVonDatumNach = new Date(bis.getFullYear(), bis.getMonth(), 1);
-        restBisDatum = new Date(bis.getFullYear(), bis.getMonth(), bis.getDate());
-        arbeitstageNach = arbeitstageZwischen(restVonDatumNach, bis);
-        arbeitstageNachGesamt = arbeitstageImMonat(bis.getFullYear(), bis.getMonth());
-      }
+        var ersterVollerMonat;
+        if (startIstErster) {
+          ersterVollerMonat = new Date(von.getFullYear(), von.getMonth(), 1);
+        } else {
+          ersterVollerMonat = new Date(von.getFullYear(), von.getMonth() + 1, 1);
+          var endeMonatVon = new Date(von.getFullYear(), von.getMonth() + 1, 0);
+          restTageVor = endeMonatVon.getDate() - von.getDate() + 1;
+          restVonDatum = new Date(von.getFullYear(), von.getMonth(), von.getDate());
+          restBisDatumVor = endeMonatVon;
+          arbeitstageVor = arbeitstageZwischen(von, endeMonatVon);
+          arbeitstageVorGesamt = arbeitstageImMonat(von.getFullYear(), von.getMonth());
+        }
 
-      if (letztesVollesMonatsende >= ersterVollerMonat) {
-        anzahlMonate = (letztesVollesMonatsende.getFullYear() - ersterVollerMonat.getFullYear()) * 12
-          + (letztesVollesMonatsende.getMonth() - ersterVollerMonat.getMonth()) + 1;
+        var letztesVollesMonatsende;
+        if (endeIstLetzter) {
+          letztesVollesMonatsende = new Date(bis.getFullYear(), bis.getMonth() + 1, 0);
+        } else {
+          letztesVollesMonatsende = new Date(bis.getFullYear(), bis.getMonth(), 0);
+          restTageNach = bis.getDate();
+          restVonDatumNach = new Date(bis.getFullYear(), bis.getMonth(), 1);
+          restBisDatum = new Date(bis.getFullYear(), bis.getMonth(), bis.getDate());
+          arbeitstageNach = arbeitstageZwischen(restVonDatumNach, bis);
+          arbeitstageNachGesamt = arbeitstageImMonat(bis.getFullYear(), bis.getMonth());
+        }
+
+        if (letztesVollesMonatsende >= ersterVollerMonat) {
+          anzahlMonate = (letztesVollesMonatsende.getFullYear() - ersterVollerMonat.getFullYear()) * 12
+            + (letztesVollesMonatsende.getMonth() - ersterVollerMonat.getMonth()) + 1;
+        }
       }
     }
 
